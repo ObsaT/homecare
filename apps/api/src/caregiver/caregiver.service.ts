@@ -107,10 +107,10 @@ export class CaregiverService {
       join clinical.patients p on p.id = r.patient_id
       left join catalog.sub_cities sc on lower(sc.name_en) = lower(coalesce(a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city'))
         or sc.id::text = coalesce(a.address_snapshot->>'sub_city_id', r.address_snapshot->>'sub_city_id')
-      where a.caregiver_id = $1 and a.status in ('ACCEPTED', 'CONFIRMED', 'EN_ROUTE', 'IN_PROGRESS', 'COMPLETED')
+      where a.caregiver_id = $1 and a.status in ('ACCEPTED', 'EN_ROUTE', 'IN_PROGRESS', 'COMPLETED')
       order by
         case when a.status in ('IN_PROGRESS', 'EN_ROUTE') then 1
-             when a.status in ('ACCEPTED', 'CONFIRMED') then 2
+             when a.status = 'ACCEPTED' then 2
              else 3
         end asc,
         a.scheduled_start desc

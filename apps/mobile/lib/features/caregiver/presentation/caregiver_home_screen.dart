@@ -35,13 +35,16 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
 
       if (mounted) {
         setState(() {
-          _profile = Map<String, dynamic>.from(profileRes.data as Map);
+          final profileData = profileRes.data is Map && profileRes.data['data'] != null
+              ? profileRes.data['data']
+              : profileRes.data;
+          _profile = Map<String, dynamic>.from(profileData as Map);
           _isAvailable = _profile?['is_available'] == true;
 
-          final rawOffers = offersRes.data as List? ?? [];
+          final rawOffers = (offersRes.data is Map ? offersRes.data['data'] : offersRes.data) as List? ?? [];
           _offers = rawOffers.map((o) => Map<String, dynamic>.from(o as Map)).toList();
 
-          final rawAppts = apptsRes.data as List? ?? [];
+          final rawAppts = (apptsRes.data is Map ? apptsRes.data['data'] : apptsRes.data) as List? ?? [];
           _upcomingVisits = rawAppts.map((a) => Map<String, dynamic>.from(a as Map)).toList();
 
           _isLoading = false;
