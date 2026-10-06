@@ -110,6 +110,25 @@ export class RequestsService {
         phone: input.emergency_contact_phone,
       }
 
+      // Normalize scheduled date & time
+      let schedDate: string = input.scheduled_date || ''
+      let schedTime: string = input.scheduled_time || ''
+      if (schedTime && schedTime.includes('T')) {
+        const parsed = new Date(schedTime)
+        const datePart = parsed.toISOString().split('T')[0] ?? '2026-10-07'
+        const timePart = parsed.toISOString().split('T')[1] ?? '10:00:00'
+        schedDate = schedDate || datePart
+        schedTime = timePart.substring(0, 5)
+      } else if (!schedDate) {
+        schedDate = new Date().toISOString().split('T')[0] ?? '2026-10-07'
+      }
+      if (!schedTime) {
+        schedTime = '10:00'
+      }
+      if (schedTime.length === 5) {
+        schedTime = `${schedTime}:00`
+      }
+
       // 6. Insert ops.requests
       const reqRes = await client.query(
         `insert into ops.requests (
@@ -126,17 +145,17 @@ export class RequestsService {
           addressId,
           JSON.stringify(addressSnapshot),
           JSON.stringify(emergencySnapshot),
-          input.scheduled_date,
-          input.scheduled_time,
-          input.duration_minutes,
+          schedDate,
+          schedTime,
+          input.duration_minutes || 120,
           input.notes || null,
         ],
       )
       const request = reqRes.rows[0]
 
       // 7. Schedule appointment
-      const scheduledStart = new Date(`${input.scheduled_date}T${input.scheduled_time}:00Z`)
-      const scheduledEnd = new Date(scheduledStart.getTime() + input.duration_minutes * 60000)
+      const scheduledStart = new Date(`${schedDate}T${schedTime}Z`)
+      const scheduledEnd = new Date(scheduledStart.getTime() + (input.duration_minutes || 120) * 60000)
 
       const apptRes = await client.query(
         `insert into ops.appointments (

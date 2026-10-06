@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_client.dart';
 import '../models/user.dart';
-
 
 class AuthState {
   final bool isAuthenticated;
@@ -42,7 +42,37 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final ApiClient _api;
 
-  AuthNotifier(this._api) : super(AuthState());
+  AuthNotifier(this._api) : super(AuthState()) {
+    restoreSession();
+  }
+
+  Future<void> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('hc_auth_token');
+      final userId = prefs.getString('hc_user_id');
+      final userPhone = prefs.getString('hc_user_phone');
+      final userName = prefs.getString('hc_user_name');
+      final userRoleStr = prefs.getString('hc_user_role');
+
+      if (token != null && token.isNotEmpty && userId != null) {
+        _api.setToken(token);
+        final role = userRoleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
+        final user = AppUser(
+          id: userId,
+          phone: userPhone ?? '+251911555555',
+          fullName: userName ?? 'Abebe Bikila',
+          role: role,
+          isAvailable: true,
+        );
+        state = state.copyWith(
+          isAuthenticated: true,
+          token: token,
+          user: user,
+        );
+      }
+    } catch (_) {}
+  }
 
   Future<bool> loginWithPassword(String phone, String password) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -54,7 +84,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final data = res.data;
       final token = data['access_token'] ?? data['data']?['access_token'];
       if (token == null) {
-        state = state.copyWith(isLoading: false, errorMessage: 'No session token received');
+        state = state.copyWith(isLoading: false, errorMessage: 'No session token received from server');
         return false;
       }
       _api.setToken(token.toString());
@@ -66,10 +96,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = AppUser(
         id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
         phone: rawUser['phone_e164'] ?? phone,
-        fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila'),
+        fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz Hailu (RN)' : 'Abebe Bikila'),
         role: userRole,
         isAvailable: true,
       );
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('hc_auth_token', token.toString());
+        await prefs.setString('hc_user_id', user.id);
+        await prefs.setString('hc_user_phone', user.phone);
+        await prefs.setString('hc_user_name', user.fullName);
+        await prefs.setString('hc_user_role', userRole == UserRole.caregiver ? 'CAREGIVER' : 'CUSTOMER');
+      } catch (_) {}
 
       state = state.copyWith(
         isLoading: false,
@@ -81,7 +120,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Invalid phone number or password. Check credentials.',
+        errorMessage: 'Invalid phone or password. Use demo account or tap 1-tap sign in.',
       );
       return false;
     }
@@ -94,11 +133,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'phone_e164': phone,
         'purpose': 'LOGIN',
       });
-      final challengeId = res.data['data']?['challenge_id'] ?? res.data['challenge_id'] ?? 'mock-challenge';
+      final challengeId = res.data['data']?['challenge_id'] ?? res.data['challenge_id'] ?? 'simulated-challenge';
       state = state.copyWith(isLoading: false, challengeId: challengeId.toString());
       return true;
     } catch (e) {
-      // In offline/dev mode, permit continuation with simulated challenge
       state = state.copyWith(isLoading: false, challengeId: 'simulated-challenge');
       return true;
     }
@@ -108,56 +146,68 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final res = await _api.dio.post('/auth/otp/verify', data: {
-        'challenge_id': state.challengeId ?? 'mock-challenge',
+        'challenge_id': state.challengeId ?? 'simulated-challenge',
         'code': code,
       });
 
       final data = res.data;
-      final token = data['access_token'] ?? data['data']?['access_token'] ?? 'mock-access-token';
-      _api.setToken(token.toString());
+      final token = data['access_token'] ?? data['data']?['access_token'];
+      if (token != null) {
+        _api.setToken(token.toString());
+        final rawUser = data['user'] ?? data['data']?['user'] ?? {};
+        final roleStr = (rawUser['role'] as String? ?? (role == UserRole.caregiver ? 'CAREGIVER' : 'CUSTOMER')).toUpperCase();
+        final userRole = roleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
 
-      final rawUser = data['user'] ?? data['data']?['user'] ?? {};
-      final roleStr = (rawUser['role'] as String? ?? (role == UserRole.caregiver ? 'CAREGIVER' : 'CUSTOMER')).toUpperCase();
-      final userRole = roleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
+        final user = AppUser(
+          id: rawUser['id'] ?? 'usr-current',
+          phone: rawUser['phone_e164'] ?? '+251911555555',
+          fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila'),
+          role: userRole,
+          isAvailable: true,
+        );
 
-      final user = AppUser(
-        id: rawUser['id'] ?? 'usr-current',
-        phone: rawUser['phone_e164'] ?? '+251911000001',
-        fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila'),
-        role: userRole,
-        isAvailable: true,
-      );
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('hc_auth_token', token.toString());
+          await prefs.setString('hc_user_id', user.id);
+          await prefs.setString('hc_user_phone', user.phone);
+          await prefs.setString('hc_user_name', user.fullName);
+          await prefs.setString('hc_user_role', userRole == UserRole.caregiver ? 'CAREGIVER' : 'CUSTOMER');
+        } catch (_) {}
+
+        state = state.copyWith(
+          isLoading: false,
+          isAuthenticated: true,
+          token: token.toString(),
+          user: user,
+        );
+        return true;
+      }
 
       state = state.copyWith(
         isLoading: false,
-        isAuthenticated: true,
-        token: token.toString(),
-        user: user,
+        errorMessage: 'Invalid verification code. Please sign in with your account password.',
       );
-      return true;
+      return false;
     } catch (e) {
-      // Dev fallback for smooth local testing
-      final user = AppUser(
-        id: 'usr-current',
-        phone: '+251911000001',
-        fullName: role == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila',
-        role: role,
-        isAvailable: true,
-      );
-      _api.setToken('mock-access-token');
-
       state = state.copyWith(
         isLoading: false,
-        isAuthenticated: true,
-        token: 'mock-access-token',
-        user: user,
+        errorMessage: 'Verification failed. Use password login or 1-tap sign-in.',
       );
-      return true;
+      return false;
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _api.setToken(null);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('hc_auth_token');
+      await prefs.remove('hc_user_id');
+      await prefs.remove('hc_user_phone');
+      await prefs.remove('hc_user_name');
+      await prefs.remove('hc_user_role');
+    } catch (_) {}
     state = AuthState();
   }
 
@@ -166,7 +216,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final updated = AppUser(
         id: state.user!.id,
         phone: state.user!.phone,
-        fullName: newRole == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila',
+        fullName: newRole == UserRole.caregiver ? 'Sister Almaz Hailu (RN)' : 'Abebe Bikila',
         role: newRole,
         isAvailable: true,
       );

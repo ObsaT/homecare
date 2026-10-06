@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
 import 'request_tracking_screen.dart';
 
 class BookCareScreen extends ConsumerStatefulWidget {
@@ -65,6 +66,17 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
   }
 
   void _submitBooking() async {
+    final authState = ref.read(authProvider);
+    if (!authState.isAuthenticated || authState.token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in with a registered customer account before booking.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     final api = ref.read(apiClientProvider);
 
@@ -133,6 +145,17 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
     } catch (e) {
       setState(() => _submitting = false);
       if (!mounted) return;
+      if (e.toString().contains('401') || e.toString().contains('Unauthorized')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired or unauthorized (401). Please sign in with your customer account.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        ref.read(authProvider.notifier).logout();
+        Navigator.pop(context);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error submitting booking: $e'),

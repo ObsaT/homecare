@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
@@ -31,7 +32,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          if (_authToken != null) {
+          if (_authToken != null && _authToken!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_authToken';
           }
           return handler.next(options);
@@ -41,9 +42,20 @@ class ApiClient {
         },
       ),
     );
+    restoreToken();
   }
 
   void setToken(String? token) {
     _authToken = token;
+  }
+
+  Future<void> restoreToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('hc_auth_token');
+      if (saved != null && saved.isNotEmpty) {
+        _authToken = saved;
+      }
+    } catch (_) {}
   }
 }
