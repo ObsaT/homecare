@@ -1,0 +1,38 @@
+{
+  "name": "homecare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Home health care platform for Addis Ababa \u2014 customer + caregiver apps and admin dashboard",
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/admin"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:contracts": "npm run test -w @homecare/contracts",
+    "test:api": "npm run test -w @homecare/api",
+    "dev:api": "npm run dev -w @homecare/api",
+    "clean": "rm -rf packages/*/dist apps/*/dist apps/*/.next packages/*/node_modules apps/*/node_modules",
+    "pretest": "npm run build -w @homecare/contracts",
+    "test:design-tokens": "npm run test -w @homecare/design-tokens",
+    "verify": "npm run lint && npm run build && npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  },
+  "overrides": {
+    "body-parser": ">=1.20.6 <2",
+    "qs": ">=6.15.4 <7",
+    "multer": ">=2.2.1 <3"
+  }
+}

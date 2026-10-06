@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Overridden to ./src so the emitted entry point is dist/main.js, matching "npm start".
+    // The base tsconfig.json keeps rootDir "." because typecheck covers test/ as well.
+    "rootDir": "./src",
+    "sourceMap": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "exclude": ["node_modules", "dist", "test", "src/**/*.spec.ts"]
+}

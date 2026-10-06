@@ -1,0 +1,6 @@
+# Forward-only migration order, one file per line. Applied by scripts/migrate.mjs.
+# Most ordered. Never reorder an applied file.
+001_auth_core.sql
+002_catalog_clinical_ops.sql
+003_seed_demo_data.sql
+004_services_ext.sql

@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+npm-debug.log*
+
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Flutter / Dart (apps/mobile)
+apps/mobile/.dart_tool/
+apps/mobile/build/
+apps/mobile/.flutter-plugins*
+# dev keys and secrets (never committed)
+.secrets
+.secrets/
+**/.secrets
+**/.secrets/**
