@@ -29,9 +29,24 @@ export class CaregiverService {
       select
         u.id, u.full_name, u.phone_e164, u.is_available,
         cp.approval_status, cp.professional_title, cp.qualification_level,
-        cp.rating_avg, cp.rating_count, cp.completed_visits
+        cp.rating_avg, cp.rating_count, cp.completed_visits,
+        cp.home_sub_city_id,
+        hsc.name_en as home_sub_city,
+        hsc.name_am as home_sub_city_am,
+        cs.notification_radius_km,
+        cs.service_area_notes,
+        coalesce(
+          (
+            select json_agg(json_build_object('id', sc.id, 'name_en', sc.name_en, 'name_am', sc.name_am))
+            from catalog.sub_cities sc
+            where sc.id = any(cp.coverage_sub_city_ids)
+          ),
+          '[]'::json
+        ) as coverage_sub_cities
       from auth.users u
       left join ops.caregiver_profiles cp on cp.user_id = u.id
+      left join catalog.sub_cities hsc on hsc.id = cp.home_sub_city_id
+      left join ops.caregiver_settings cs on cs.caregiver_id = u.id
       where u.id = $1
     `
     const { rows } = await this.pool.query(query, [caregiverUserId])
@@ -55,12 +70,17 @@ export class CaregiverService {
         a.address_snapshot, a.price_santim,
         s.code as service_code, s.name_en as service_name_en, s.name_am as service_name_am,
         p.full_name as patient_name,
+        coalesce(sc.name_en, a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city') as sub_city_name,
+        coalesce(sc.name_am, '') as sub_city_name_am,
+        coalesce(a.address_snapshot->>'landmark', r.address_snapshot->>'landmark') as landmark,
         asg.id as assignment_id, asg.status as offer_status, asg.offered_at, asg.expires_at
       from ops.assignments asg
       join ops.appointments a on a.id = asg.appointment_id
       join ops.requests r on r.id = a.request_id
       join catalog.services s on s.id = a.service_id
       join clinical.patients p on p.id = r.patient_id
+      left join catalog.sub_cities sc on lower(sc.name_en) = lower(coalesce(a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city'))
+        or sc.id::text = coalesce(a.address_snapshot->>'sub_city_id', r.address_snapshot->>'sub_city_id')
       where asg.caregiver_id = $1 and asg.status = 'OFFERED'
       order by asg.offered_at desc
     `

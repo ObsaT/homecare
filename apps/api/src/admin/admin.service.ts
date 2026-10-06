@@ -51,6 +51,12 @@ export class AdminService {
       select
         r.id, r.reference, r.status, r.duration_minutes, r.urgency, r.notes, r.review_note,
         r.preferred_date, r.preferred_time, r.created_at,
+        r.address_snapshot,
+        coalesce(sc.name_en, r.address_snapshot->>'sub_city') as sub_city_name,
+        coalesce(sc.name_am, '') as sub_city_name_am,
+        sc.id as sub_city_id,
+        r.address_snapshot->>'landmark' as landmark,
+        r.address_snapshot->>'house' as house_number,
         s.code as service_code, s.name_en as service_name_en, s.name_am as service_name_am,
         s.requires_review as service_requires_review, s.billing_unit,
         c.full_name as customer_name, c.phone_e164 as customer_phone,
@@ -64,6 +70,8 @@ export class AdminService {
       join clinical.patients p on p.id = r.patient_id
       left join ops.appointments a on a.request_id = r.id and a.occurrence_index = 1
       left join auth.users cg on cg.id = a.caregiver_id
+      left join catalog.sub_cities sc on lower(sc.name_en) = lower(r.address_snapshot->>'sub_city')
+        or sc.id::text = r.address_snapshot->>'sub_city_id'
     `
     const params: string[] = []
     if (statusFilter) {
@@ -138,14 +146,124 @@ export class AdminService {
       select
         u.id, u.full_name, u.phone_e164, u.status as account_status, u.is_available,
         cp.approval_status, cp.professional_title, cp.qualification_level,
-        cp.rating_avg, cp.rating_count, cp.completed_visits
+        cp.rating_avg, cp.rating_count, cp.completed_visits,
+        cp.home_sub_city_id,
+        hsc.name_en as home_sub_city,
+        hsc.name_am as home_sub_city_am,
+        cs.notification_radius_km,
+        cs.service_area_notes,
+        coalesce(
+          (
+            select json_agg(json_build_object('id', sc.id, 'name_en', sc.name_en, 'name_am', sc.name_am))
+            from catalog.sub_cities sc
+            where sc.id = any(cp.coverage_sub_city_ids)
+          ),
+          '[]'::json
+        ) as coverage_sub_cities
       from auth.users u
       left join ops.caregiver_profiles cp on cp.user_id = u.id
+      left join catalog.sub_cities hsc on hsc.id = cp.home_sub_city_id
+      left join ops.caregiver_settings cs on cs.caregiver_id = u.id
       where u.role = 'CAREGIVER' and u.deleted_at is null
       order by u.created_at desc
     `
     const { rows } = await this.pool.query(query)
     return rows
+  }
+
+  async getCaregiverCandidates(appointmentId: string) {
+    // 1. Get the appointment and request location
+    const apptRes = await this.pool.query(
+      `select
+         a.id as appointment_id,
+         a.request_id,
+         a.service_id,
+         s.name_en as service_name_en,
+         r.reference as request_reference,
+         coalesce(sc.name_en, r.address_snapshot->>'sub_city') as request_sub_city_name,
+         coalesce(sc.name_am, '') as request_sub_city_name_am,
+         sc.id as request_sub_city_id,
+         r.address_snapshot->>'landmark' as request_landmark,
+         r.address_snapshot->>'house' as request_house
+       from ops.appointments a
+       join ops.requests r on r.id = a.request_id
+       join catalog.services s on s.id = a.service_id
+       left join catalog.sub_cities sc on lower(sc.name_en) = lower(r.address_snapshot->>'sub_city')
+         or sc.id::text = r.address_snapshot->>'sub_city_id'
+       where a.id = $1`,
+      [appointmentId],
+    )
+    if (apptRes.rows.length === 0) {
+      throw new NotFoundException('Appointment not found')
+    }
+    const appt = apptRes.rows[0]
+    const subCityId = appt.request_sub_city_id
+
+    // 2. Fetch all approved caregivers and evaluate match tier against subCityId
+    const query = `
+      select
+        u.id,
+        u.full_name,
+        u.phone_e164,
+        u.is_available,
+        cp.approval_status,
+        cp.professional_title,
+        cp.qualification_level,
+        cp.rating_avg,
+        cp.rating_count,
+        cp.completed_visits,
+        hsc.id as home_sub_city_id,
+        hsc.name_en as home_sub_city,
+        hsc.name_am as home_sub_city_am,
+        cs.notification_radius_km,
+        cs.service_area_notes,
+        coalesce(
+          (
+            select json_agg(json_build_object('id', sc.id, 'name_en', sc.name_en, 'name_am', sc.name_am))
+            from catalog.sub_cities sc
+            where sc.id = any(cp.coverage_sub_city_ids)
+          ),
+          '[]'::json
+        ) as coverage_sub_cities,
+        case
+          when $1::uuid is not null and cp.home_sub_city_id = $1 then 'PRIMARY_LOCAL'
+          when $1::uuid is not null and $1 = any(cp.coverage_sub_city_ids) then 'COVERAGE_AREA'
+          else 'OUTSIDE_ZONE'
+        end as match_tier,
+        case
+          when $1::uuid is not null and cp.home_sub_city_id = $1 then '⭐ Primary Local Base'
+          when $1::uuid is not null and $1 = any(cp.coverage_sub_city_ids) then '📍 Service Coverage Area'
+          else '⚠️ Outside Standard Area'
+        end as match_tier_label,
+        case
+          when $1::uuid is not null and cp.home_sub_city_id = $1 then 100
+          when $1::uuid is not null and $1 = any(cp.coverage_sub_city_ids) then 75
+          else 25
+        end + (case when u.is_available then 20 else 0 end) + coalesce(floor(cp.rating_avg * 4)::int, 0) as match_score
+      from auth.users u
+      join ops.caregiver_profiles cp on cp.user_id = u.id
+      left join catalog.sub_cities hsc on hsc.id = cp.home_sub_city_id
+      left join ops.caregiver_settings cs on cs.caregiver_id = u.id
+      where u.role = 'CAREGIVER' and u.deleted_at is null and cp.approval_status = 'APPROVED'
+      order by
+        case
+          when $1::uuid is not null and cp.home_sub_city_id = $1 then 1
+          when $1::uuid is not null and $1 = any(cp.coverage_sub_city_ids) then 2
+          else 3
+        end asc,
+        u.is_available desc,
+        cp.rating_avg desc nulls last,
+        cp.completed_visits desc
+    `
+
+    const { rows: candidates } = await this.pool.query(query, [subCityId])
+
+    return {
+      appointment: appt,
+      candidates,
+      matched_count: candidates.filter(c => c.match_tier !== 'OUTSIDE_ZONE').length,
+      total_count: candidates.length,
+    }
   }
 
   async updateCaregiverApproval(caregiverId: string, status: 'APPROVED' | 'REJECTED' | 'SUSPENDED', adminUserId: string) {

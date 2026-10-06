@@ -12,7 +12,16 @@ import {
   Award,
   Clock,
   AlertCircle,
+  MapPin,
+  Compass,
+  Filter,
 } from 'lucide-react';
+
+interface SubCityItem {
+  id: string;
+  name_en: string;
+  name_am: string;
+}
 
 interface CaregiverData {
   id: string;
@@ -26,10 +35,17 @@ interface CaregiverData {
   rating_count: number;
   completed_visits: number;
   is_available: boolean;
+  home_sub_city_id?: string;
+  home_sub_city?: string;
+  home_sub_city_am?: string;
+  notification_radius_km?: number;
+  service_area_notes?: string;
+  coverage_sub_cities?: SubCityItem[];
 }
 
 export default function CaregiversPage() {
   const [caregivers, setCaregivers] = useState<CaregiverData[]>([]);
+  const [selectedSubCity, setSelectedSubCity] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -53,13 +69,35 @@ export default function CaregiversPage() {
     loadCaregivers();
   }, []);
 
+  const subCitiesList = [
+    'ALL',
+    'Bole',
+    'Yeka',
+    'Kirkos',
+    'Arada',
+    'Addis Ketema',
+    'Lemi Kura',
+    'Lideta',
+    'Gullele',
+    'Nifas Silk-Lafto',
+  ];
+
+  const filteredCaregivers = caregivers.filter((cg) => {
+    if (selectedSubCity === 'ALL') return true;
+    const matchesBase = cg.home_sub_city?.toLowerCase() === selectedSubCity.toLowerCase();
+    const matchesCoverage = cg.coverage_sub_cities?.some(
+      (sc) => sc.name_en.toLowerCase() === selectedSubCity.toLowerCase()
+    );
+    return matchesBase || matchesCoverage;
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#151A19]">Caregiver & Nurse Roster</h1>
           <p className="text-sm text-[#5A6360] mt-0.5">
-            Clinical license verification, background clearances, and real-time field availability
+            Clinical license verification, Addis Ababa service coverage zones, and live dispatch availability
           </p>
         </div>
         <button
@@ -72,13 +110,36 @@ export default function CaregiversPage() {
         </button>
       </div>
 
+      {/* Sub-City Location Filter Tabs */}
+      <div className="bg-white p-3 rounded-2xl border border-[#E6E9E8] shadow-sm flex items-center gap-2 overflow-x-auto">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-[#5A6360] pl-1 pr-2 shrink-0">
+          <MapPin className="w-4 h-4 text-[#0F6B5C]" />
+          <span>Filter Operating Sub-City:</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {subCitiesList.map((sc) => (
+            <button
+              key={sc}
+              onClick={() => setSelectedSubCity(sc)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 ${
+                selectedSubCity === sc
+                  ? 'bg-[#0F6B5C] text-white shadow-xs'
+                  : 'bg-[#FAFBFA] text-[#5A6360] border border-[#E6E9E8] hover:bg-[#F1F3F2]'
+              }`}
+            >
+              {sc === 'ALL' ? 'All Sub-Cities' : sc}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {caregivers.length === 0 ? (
+        {filteredCaregivers.length === 0 ? (
           <div className="col-span-full bg-white rounded-2xl border border-[#E6E9E8] p-12 text-center text-[#5A6360]">
-            {loading ? 'Loading caregiver roster...' : 'No caregivers found.'}
+            {loading ? 'Loading caregiver roster...' : 'No caregivers registered in this sub-city zone.'}
           </div>
         ) : (
-          caregivers.map((cg) => (
+          filteredCaregivers.map((cg) => (
             <div key={cg.id} className="bg-white rounded-2xl border border-[#E6E9E8] p-6 shadow-sm space-y-4 hover:border-[#0F6B5C]/40 transition">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -100,6 +161,44 @@ export default function CaregiversPage() {
                   <span className={`w-1.5 h-1.5 rounded-full ${cg.is_available ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                   {cg.is_available ? 'Available' : 'Off-Duty'}
                 </span>
+              </div>
+
+              {/* Operating Location & Service Area Badges */}
+              <div className="p-3 bg-teal-50/60 rounded-xl border border-teal-100 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-teal-950 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-[#0F6B5C]" />
+                    Base: {cg.home_sub_city || 'Addis Ababa'}
+                  </span>
+                  <span className="text-[11px] font-medium text-teal-800 flex items-center gap-1">
+                    <Compass className="w-3 h-3 text-teal-600" />
+                    {cg.notification_radius_km || 10} km radius
+                  </span>
+                </div>
+
+                {cg.coverage_sub_cities && cg.coverage_sub_cities.length > 0 && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-teal-800/80 block mb-1">
+                      Coverage Sub-Cities
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {cg.coverage_sub_cities.map((sc) => (
+                        <span
+                          key={sc.id}
+                          className="px-2 py-0.5 rounded-md bg-white border border-teal-200 text-teal-900 text-[10px] font-medium"
+                        >
+                          {sc.name_en}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {cg.service_area_notes && (
+                  <p className="text-[11px] text-teal-800/90 italic pt-1 border-t border-teal-100/80">
+                    "{cg.service_area_notes}"
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 py-3 border-y border-[#E6E9E8] text-xs">

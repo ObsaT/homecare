@@ -18,6 +18,10 @@ import {
   FileEdit,
   ClipboardList,
   Sparkles,
+  MapPin,
+  Navigation,
+  Star,
+  Check,
 } from 'lucide-react';
 
 interface RequestItem {
@@ -30,6 +34,11 @@ interface RequestItem {
   review_note?: string;
   preferred_date: string;
   preferred_time: string;
+  sub_city_name?: string;
+  sub_city_name_am?: string;
+  sub_city_id?: string;
+  landmark?: string;
+  house_number?: string;
   service_code: string;
   service_name_en: string;
   service_name_am: string;
@@ -45,22 +54,42 @@ interface RequestItem {
   caregiver_name: string | null;
 }
 
-interface CaregiverOption {
+interface CandidateCaregiver {
   id: string;
   full_name: string;
   phone_e164: string;
   professional_title: string;
-  rating_avg?: number;
+  qualification_level?: string;
+  rating_avg?: number | null;
+  rating_count?: number;
+  completed_visits?: number;
   is_available: boolean;
+  home_sub_city?: string;
+  home_sub_city_am?: string;
+  notification_radius_km?: number;
+  service_area_notes?: string;
+  coverage_sub_cities?: Array<{ id: string; name_en: string; name_am: string }>;
+  match_tier: 'PRIMARY_LOCAL' | 'COVERAGE_AREA' | 'OUTSIDE_ZONE';
+  match_tier_label: string;
+  match_score: number;
 }
 
 export default function RequestsPage() {
   const [requests, setRequests] = useState<RequestItem[]>([]);
-  const [caregivers, setCaregivers] = useState<CaregiverOption[]>([]);
   
   // Assign modal state
   const [selectedAppointment, setSelectedAppointment] = useState<string | null>(null);
   const [selectedCaregiverId, setSelectedCaregiverId] = useState<string>('');
+  const [candidates, setCandidates] = useState<CandidateCaregiver[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [filterOnlyLocal, setFilterOnlyLocal] = useState(true);
+  const [candidateReqLocation, setCandidateReqLocation] = useState<{
+    subCity: string;
+    landmark?: string;
+    reference: string;
+    patientName: string;
+    serviceName: string;
+  } | null>(null);
   const [assigning, setAssigning] = useState(false);
 
   // Quote / Review modal state
@@ -77,16 +106,9 @@ export default function RequestsPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [reqsRes, cgRes] = await Promise.all([
-      apiFetch<RequestItem[]>('/admin/requests'),
-      apiFetch<CaregiverOption[]>('/admin/caregivers'),
-    ]);
-
+    const reqsRes = await apiFetch<RequestItem[]>('/admin/requests');
     if (reqsRes.data) {
       setRequests(reqsRes.data);
-    }
-    if (cgRes.data) {
-      setCaregivers(cgRes.data);
     }
     setLoading(false);
   };
@@ -95,10 +117,34 @@ export default function RequestsPage() {
     loadData();
   }, []);
 
-  const handleOpenAssignModal = (appointmentId: string) => {
-    setSelectedAppointment(appointmentId);
-    if (caregivers.length > 0 && caregivers[0]) {
-      setSelectedCaregiverId(caregivers[0].id);
+  const handleOpenAssignModal = async (req: RequestItem) => {
+    setSelectedAppointment(req.appointment_id);
+    setCandidateReqLocation({
+      subCity: req.sub_city_name || 'Bole',
+      landmark: req.landmark,
+      reference: req.reference,
+      patientName: req.patient_name,
+      serviceName: req.service_name_en,
+    });
+    setCandidatesLoading(true);
+    setFilterOnlyLocal(true);
+    setSelectedCaregiverId('');
+
+    const res = await apiFetch<{
+      appointment: any;
+      candidates: CandidateCaregiver[];
+      matched_count: number;
+      total_count: number;
+    }>(`/admin/appointments/${req.appointment_id}/candidates`);
+
+    setCandidatesLoading(false);
+    if (res.data?.candidates && res.data.candidates.length > 0) {
+      setCandidates(res.data.candidates);
+      // Select the highest ranked available candidate
+      const topChoice = res.data.candidates.find(c => c.is_available) || res.data.candidates[0];
+      setSelectedCaregiverId(topChoice ? topChoice.id : '');
+    } else {
+      setCandidates([]);
     }
   };
 
@@ -271,6 +317,7 @@ export default function RequestsPage() {
               <tr>
                 <th className="px-5 py-3.5">Reference / Patient</th>
                 <th className="px-5 py-3.5">Care Service & Price</th>
+                <th className="px-5 py-3.5">Location & Landmark</th>
                 <th className="px-5 py-3.5">Contact / Family</th>
                 <th className="px-5 py-3.5">Requested Timing</th>
                 <th className="px-5 py-3.5">Status</th>
@@ -281,7 +328,7 @@ export default function RequestsPage() {
             <tbody className="divide-y divide-[#E6E9E8]">
               {filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-[#5A6360]">
+                  <td colSpan={8} className="px-5 py-12 text-center text-[#5A6360]">
                     {loading ? 'Fetching dispatch requests...' : 'No care requests matching your filter.'}
                   </td>
                 </tr>
@@ -322,6 +369,23 @@ export default function RequestsPage() {
                           <p className="text-[11px] text-gray-500 italic mt-1 line-clamp-1 max-w-xs">
                             "{req.notes}"
                           </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold">
+                            <MapPin className="w-3 h-3 text-[#0F6B5C]" />
+                            {req.sub_city_name || 'Addis Ababa'}
+                          </span>
+                        </div>
+                        {req.landmark && (
+                          <p className="text-[11px] text-[#5A6360] mt-1 flex items-center gap-1 truncate max-w-[170px]" title={req.landmark}>
+                            <Navigation className="w-3 h-3 text-gray-400 shrink-0" />
+                            {req.landmark}
+                          </p>
+                        )}
+                        {req.house_number && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{req.house_number}</p>
                         )}
                       </td>
                       <td className="px-5 py-4">
@@ -387,11 +451,11 @@ export default function RequestsPage() {
                           {/* Assign Button */}
                           {req.appointment_id && req.status !== 'COMPLETED' ? (
                             <button
-                              onClick={() => handleOpenAssignModal(req.appointment_id)}
+                              onClick={() => handleOpenAssignModal(req)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F6B5C] text-white font-semibold text-xs hover:bg-[#0A4F44] transition shadow-sm"
                             >
                               <UserPlus className="w-3.5 h-3.5" />
-                              {req.caregiver_name ? 'Reassign' : 'Assign'}
+                              {req.caregiver_name ? 'Reassign' : 'Dispatch'}
                             </button>
                           ) : (
                             <span className="text-[#5A6360] text-xs">Locked</span>
@@ -527,14 +591,17 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {/* Assignment Modal */}
+      {/* Assignment Modal with Location-Based Dispatch Intelligence */}
       {selectedAppointment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b pb-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-[#0F6B5C]" />
-                <h3 className="font-bold text-base text-[#151A19]">Dispatch Caregiver / Nurse</h3>
+                <div>
+                  <h3 className="font-bold text-base text-[#151A19]">Location-Based Care Dispatch</h3>
+                  <p className="text-[11px] text-[#5A6360]">Ranked by Addis Ababa sub-city & operating radius</p>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedAppointment(null)}
@@ -544,46 +611,149 @@ export default function RequestsPage() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <label className="text-xs font-semibold text-gray-700">
-                Select Certified Field Professional
-              </label>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {caregivers.map((cg) => (
-                  <label
-                    key={cg.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                      selectedCaregiverId === cg.id
-                        ? 'border-[#0F6B5C] bg-[#0F6B5C]/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="caregiver"
-                        value={cg.id}
-                        checked={selectedCaregiverId === cg.id}
-                        onChange={(e) => setSelectedCaregiverId(e.target.value)}
-                        className="text-[#0F6B5C] focus:ring-[#0F6B5C]"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-gray-900">{cg.full_name}</p>
-                        <p className="text-[11px] text-gray-500">{cg.professional_title} • {cg.phone_e164}</p>
-                      </div>
-                    </div>
-                    {cg.is_available ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded">
-                        Available
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                        Busy
-                      </span>
-                    )}
-                  </label>
-                ))}
+            {/* Visit Destination Location Card */}
+            {candidateReqLocation && (
+              <div className="p-3 bg-teal-50/70 rounded-2xl border border-teal-200/80 flex items-start justify-between text-xs">
+                <div>
+                  <div className="flex items-center gap-1.5 font-bold text-teal-950">
+                    <MapPin className="w-4 h-4 text-[#0F6B5C] shrink-0" />
+                    <span>Target Area: {candidateReqLocation.subCity} Sub-City</span>
+                  </div>
+                  {candidateReqLocation.landmark && (
+                    <p className="text-[11px] text-teal-800 mt-0.5 ml-5">
+                      Landmark: {candidateReqLocation.landmark}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-teal-700 mt-1 ml-5">
+                    Patient: <span className="font-semibold text-teal-900">{candidateReqLocation.patientName}</span> • {candidateReqLocation.serviceName}
+                  </p>
+                </div>
+                <span className="font-mono text-[10px] bg-white px-2 py-0.5 rounded border border-teal-200 text-teal-800 font-bold shrink-0">
+                  {candidateReqLocation.reference}
+                </span>
               </div>
+            )}
+
+            {/* Coverage Filter Controls */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="text-xs font-bold text-gray-700">
+                Caregiver Candidates Ranking
+              </label>
+              <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setFilterOnlyLocal(true)}
+                  className={`px-2 py-1 rounded-md font-semibold transition ${
+                    filterOnlyLocal ? 'bg-white text-[#0F6B5C] shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Local & Coverage ({candidates.filter(c => c.match_tier !== 'OUTSIDE_ZONE').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterOnlyLocal(false)}
+                  className={`px-2 py-1 rounded-md font-semibold transition ${
+                    !filterOnlyLocal ? 'bg-white text-[#0F6B5C] shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  All ({candidates.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Candidate List */}
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {candidatesLoading ? (
+                <div className="py-12 text-center text-xs text-[#5A6360] space-y-2">
+                  <div className="w-6 h-6 border-2 border-[#0F6B5C] border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p>Matching registered caregivers within operating radius...</p>
+                </div>
+              ) : (
+                (() => {
+                  const displayCandidates = filterOnlyLocal
+                    ? candidates.filter(c => c.match_tier !== 'OUTSIDE_ZONE')
+                    : candidates;
+
+                  if (displayCandidates.length === 0) {
+                    return (
+                      <div className="p-6 text-center text-xs text-[#5A6360] bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-1.5" />
+                        <p className="font-semibold text-gray-700">No primary coverage caregivers found in this area.</p>
+                        <p className="text-[11px] mt-1 text-gray-500">Switch filter to "All" to dispatch caregivers outside their usual zone.</p>
+                      </div>
+                    );
+                  }
+
+                  return displayCandidates.map((cg) => (
+                    <label
+                      key={cg.id}
+                      className={`block p-3 rounded-xl border cursor-pointer transition ${
+                        selectedCaregiverId === cg.id
+                          ? 'border-[#0F6B5C] bg-[#0F6B5C]/5 ring-1 ring-[#0F6B5C]'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5">
+                          <input
+                            type="radio"
+                            name="caregiver"
+                            value={cg.id}
+                            checked={selectedCaregiverId === cg.id}
+                            onChange={(e) => setSelectedCaregiverId(e.target.value)}
+                            className="mt-1 text-[#0F6B5C] focus:ring-[#0F6B5C]"
+                          />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-gray-900">{cg.full_name}</p>
+                              {/* Location Match Badges */}
+                              {cg.match_tier === 'PRIMARY_LOCAL' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  ⭐ Base: {cg.home_sub_city}
+                                </span>
+                              )}
+                              {cg.match_tier === 'COVERAGE_AREA' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 border border-sky-300">
+                                  📍 Coverage ({cg.notification_radius_km || 10}km)
+                                </span>
+                              )}
+                              {cg.match_tier === 'OUTSIDE_ZONE' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                  ⚠️ Outside Zone ({cg.home_sub_city})
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              {cg.professional_title} • {cg.phone_e164}
+                            </p>
+                            {cg.service_area_notes && (
+                              <p className="text-[10px] text-gray-600 italic mt-0.5">
+                                Zone: {cg.service_area_notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end shrink-0 gap-1">
+                          {cg.is_available ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded">
+                              Available
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                              Busy
+                            </span>
+                          )}
+                          <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                            {cg.rating_avg ? Number(cg.rating_avg).toFixed(1) : '5.0'}
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+                  ));
+                })()
+              )}
             </div>
 
             <div className="flex items-center gap-3 pt-3 border-t">

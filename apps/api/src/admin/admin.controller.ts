@@ -22,6 +22,11 @@ export class AdminController {
     return { data: await this.admin.listRequests(status) }
   }
 
+  @Get('appointments/:id/candidates')
+  async getCaregiverCandidates(@Param('id') appointmentId: string) {
+    return { data: await this.admin.getCaregiverCandidates(appointmentId) }
+  }
+
   @Post('appointments/:id/assign')
   async assignCaregiver(
     @CurrentUser() user: AuthenticatedUser,

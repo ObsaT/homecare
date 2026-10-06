@@ -149,12 +149,19 @@ describe('Home Care Full End-to-End Workflow', () => {
     expect(custListRes.status).toBe(200)
     expect(custListRes.body.data.some((r: { id: string }) => r.id === requestData.id)).toBe(true)
 
-    // D. Admin views summary and assigns caregiver
+    // D. Admin views candidates and assigns caregiver
     const adminSummary = await request(app.getHttpServer())
       .get('/api/v1/admin/dashboard/summary')
       .set('Authorization', `Bearer ${adminToken}`)
     expect(adminSummary.status).toBe(200)
     expect(adminSummary.body.data.pending_requests).toBeGreaterThanOrEqual(1)
+
+    const candidatesRes = await request(app.getHttpServer())
+      .get(`/api/v1/admin/appointments/${appointmentId}/candidates`)
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(candidatesRes.status).toBe(200)
+    expect(candidatesRes.body.data.candidates).toBeDefined()
+    expect(candidatesRes.body.data.appointment.request_sub_city_name).toBe('Bole')
 
     const assignRes = await request(app.getHttpServer())
       .post(`/api/v1/admin/appointments/${appointmentId}/assign`)
@@ -169,6 +176,8 @@ describe('Home Care Full End-to-End Workflow', () => {
     expect(offersRes.status).toBe(200)
     const offer = offersRes.body.data.find((o: { appointment_id: string }) => o.appointment_id === appointmentId)
     expect(offer).toBeDefined()
+    expect(offer.sub_city_name).toBe('Bole')
+    expect(offer.landmark).toBe('Next to Atlas Hotel')
 
     const acceptRes = await request(app.getHttpServer())
       .post(`/api/v1/caregiver/offers/${appointmentId}/accept`)
