@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class ApiClient {
   static String get defaultBaseUrl {
     if (kIsWeb) {
-      return 'http://localhost:3000/api/v1';
+      final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+      return 'http://$host:3000/api/v1';
     }
     return 'http://10.0.2.2:3000/api/v1';
   }

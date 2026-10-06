@@ -18,7 +18,7 @@ void main() {
       expect(find.text('Home Care Addis'), findsOneWidget);
       expect(find.text('Customer Mode'), findsOneWidget);
       expect(find.text('Caregiver / Nurse'), findsOneWidget);
-      expect(find.text('Send SMS Code'), findsOneWidget);
+      expect(find.text('Sign In With Account'), findsOneWidget);
     });
 
     testWidgets('Login screen toggles between customer and caregiver role modes', (WidgetTester tester) async {

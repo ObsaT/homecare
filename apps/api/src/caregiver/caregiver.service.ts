@@ -88,6 +88,38 @@ export class CaregiverService {
     return rows
   }
 
+  async getAppointments(caregiverUserId: string) {
+    const query = `
+      select
+        a.id as appointment_id, a.status as appointment_status,
+        a.scheduled_start, a.scheduled_end, a.duration_minutes,
+        a.address_snapshot, a.price_santim,
+        s.code as service_code, s.name_en as service_name_en, s.name_am as service_name_am,
+        p.full_name as patient_name, p.age_years as patient_age,
+        r.reference as request_reference, r.notes as clinical_notes,
+        coalesce(sc.name_en, a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city') as sub_city_name,
+        coalesce(sc.name_am, '') as sub_city_name_am,
+        coalesce(a.address_snapshot->>'landmark', r.address_snapshot->>'landmark') as landmark,
+        coalesce(a.address_snapshot->>'house', r.address_snapshot->>'house') as house_number
+      from ops.appointments a
+      join ops.requests r on r.id = a.request_id
+      join catalog.services s on s.id = a.service_id
+      join clinical.patients p on p.id = r.patient_id
+      left join catalog.sub_cities sc on lower(sc.name_en) = lower(coalesce(a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city'))
+        or sc.id::text = coalesce(a.address_snapshot->>'sub_city_id', r.address_snapshot->>'sub_city_id')
+      where a.caregiver_id = $1 and a.status in ('ACCEPTED', 'CONFIRMED', 'EN_ROUTE', 'IN_PROGRESS', 'COMPLETED')
+      order by
+        case when a.status in ('IN_PROGRESS', 'EN_ROUTE') then 1
+             when a.status in ('ACCEPTED', 'CONFIRMED') then 2
+             else 3
+        end asc,
+        a.scheduled_start desc
+      limit 20
+    `
+    const { rows } = await this.pool.query(query, [caregiverUserId])
+    return rows
+  }
+
   async acceptOffer(caregiverUserId: string, appointmentId: string) {
     const client = await this.pool.connect()
     try {

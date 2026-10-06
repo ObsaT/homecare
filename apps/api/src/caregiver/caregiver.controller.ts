@@ -26,6 +26,11 @@ export class CaregiverController {
     return { data: await this.caregiver.getOffers(user.id) }
   }
 
+  @Get('appointments')
+  async getAppointments(@CurrentUser() user: AuthenticatedUser) {
+    return { data: await this.caregiver.getAppointments(user.id) }
+  }
+
   @Post('offers/:id/accept')
   async acceptOffer(
     @CurrentUser() user: AuthenticatedUser,

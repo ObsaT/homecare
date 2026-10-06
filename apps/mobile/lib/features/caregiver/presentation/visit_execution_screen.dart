@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
-class VisitExecutionScreen extends StatefulWidget {
+class VisitExecutionScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> visit;
 
   const VisitExecutionScreen({super.key, required this.visit});
 
   @override
-  State<VisitExecutionScreen> createState() => _VisitExecutionScreenState();
+  ConsumerState<VisitExecutionScreen> createState() => _VisitExecutionScreenState();
 }
 
-class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
-  String _visitStatus = 'CONFIRMED'; // CONFIRMED -> EN_ROUTE -> IN_PROGRESS -> COMPLETED
-  DateTime? _startedAt;
-  DateTime? _completedAt;
+class _VisitExecutionScreenState extends ConsumerState<VisitExecutionScreen> {
+  late String _visitStatus; // CONFIRMED -> EN_ROUTE -> IN_PROGRESS -> COMPLETED
+  bool _isSubmitting = false;
 
   // Clinical Vitals Form Fields
   final _bpSystolicController = TextEditingController(text: '120');
@@ -21,33 +22,147 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
   final _heartRateController = TextEditingController(text: '74');
   final _temperatureController = TextEditingController(text: '36.8');
   final _oxygenSaturationController = TextEditingController(text: '98');
-  final _clinicalNotesController = TextEditingController();
+  final _clinicalNotesController = TextEditingController(text: 'Patient evaluated in stable clinical condition. Vitals checked and care plan administered.');
   final _suppliesUsedController = TextEditingController(text: 'Sterile gauze (2 pkts), Betadine solution, Micropore tape');
-  final _followUpRecommendationController = TextEditingController(text: 'Continue twice-daily wound care. Routine follow-up in 48 hours.');
+  final _followUpRecommendationController = TextEditingController(text: 'Continue twice-daily care. Routine follow-up in 48 hours.');
 
   final Set<String> _servicesProvided = {
     'Vital signs monitored',
     'Sterile wound dressing applied',
   };
 
-  void _startEnRoute() {
-    setState(() => _visitStatus = 'EN_ROUTE');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Status updated: Caregiver en route to Addis address.')),
-    );
+  @override
+  void initState() {
+    super.initState();
+    final rawStatus = (widget.visit['appointment_status'] ?? widget.visit['status'] ?? 'CONFIRMED').toString().toUpperCase();
+    if (rawStatus == 'ACCEPTED') {
+      _visitStatus = 'CONFIRMED';
+    } else {
+      _visitStatus = rawStatus;
+    }
   }
 
-  void _startVisit() {
-    setState(() {
-      _visitStatus = 'IN_PROGRESS';
-      _startedAt = DateTime.now();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Visit started! Arrival timestamp recorded.'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+  String get _appointmentId => (widget.visit['appointment_id'] ?? widget.visit['id'] ?? '').toString();
+
+  Future<void> _startEnRoute() async {
+    setState(() => _isSubmitting = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.dio.post('/caregiver/appointments/$_appointmentId/en-route');
+      setState(() {
+        _visitStatus = 'EN_ROUTE';
+        _isSubmitting = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Status updated: Caregiver en route to Addis address.')),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update status: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _startVisit() async {
+    setState(() => _isSubmitting = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.dio.post(
+        '/caregiver/appointments/$_appointmentId/arrive',
+        data: {'lat': 9.0108, 'lng': 38.7617},
+      );
+      setState(() {
+        _visitStatus = 'IN_PROGRESS';
+        _isSubmitting = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Visit started! Arrival timestamp recorded.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start visit: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitCompletion(BuildContext dialogContext) async {
+    final vitals = {
+      'bp_systolic': int.tryParse(_bpSystolicController.text.trim()) ?? 120,
+      'bp_diastolic': int.tryParse(_bpDiastolicController.text.trim()) ?? 80,
+      'heart_rate': int.tryParse(_heartRateController.text.trim()) ?? 74,
+      'temperature_c': double.tryParse(_temperatureController.text.trim()) ?? 36.8,
+      'oxygen_sat_pct': int.tryParse(_oxygenSaturationController.text.trim()) ?? 98,
+      'notes': _servicesProvided.join(', '),
+    };
+
+    final suppliesText = _suppliesUsedController.text.trim();
+    final supplies = suppliesText.isNotEmpty
+        ? [{'item': suppliesText, 'quantity': 1}]
+        : <Map<String, dynamic>>[];
+
+    final body = {
+      'observations': _clinicalNotesController.text.trim(),
+      'supplies_used': supplies,
+      'follow_up_required': _followUpRecommendationController.text.trim().isNotEmpty,
+      'follow_up_notes': _followUpRecommendationController.text.trim(),
+      'vitals': vitals,
+    };
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.dio.post('/caregiver/appointments/$_appointmentId/complete', data: body);
+
+      if (mounted) {
+        Navigator.pop(dialogContext); // Close sheet
+        setState(() {
+          _visitStatus = 'COMPLETED';
+        });
+
+        showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: AppColors.success),
+                SizedBox(width: 8),
+                Text('Visit Completed!'),
+              ],
+            ),
+            content: const Text(
+              'Clinical notes and vital signs have been securely stored in the PostgreSQL database. The customer and administrative desk have been notified.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                  Navigator.pop(context);
+                },
+                child: const Text('Back to Schedule'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to complete visit: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   void _showCompleteDialog() {
@@ -207,37 +322,7 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        setState(() {
-                          _visitStatus = 'COMPLETED';
-                          _completedAt = DateTime.now();
-                        });
-                        showDialog(
-                          context: context,
-                          builder: (c) => AlertDialog(
-                            title: const Row(
-                              children: [
-                                Icon(Icons.check_circle, color: AppColors.success),
-                                SizedBox(width: 8),
-                                Text('Visit Completed!'),
-                              ],
-                            ),
-                            content: const Text(
-                              'Clinical notes and vital signs have been securely stored. The customer and administrative desk have been notified.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(c);
-                                  Navigator.pop(context);
-                                },
-                                child: const Text('Back to Schedule'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                      onPressed: () => _submitCompletion(ctx),
                       child: const Text('Confirm & Complete Visit', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
@@ -253,6 +338,11 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
   @override
   Widget build(BuildContext context) {
     final visit = widget.visit;
+    final patientName = visit['patient_name'] ?? 'Patient';
+    final serviceName = visit['service_name_en'] ?? visit['service_name'] ?? 'Care Visit';
+    final subCity = visit['sub_city_name'] ?? visit['sub_city'] ?? 'Addis Ababa';
+    final landmark = visit['landmark'] ?? visit['address'] ?? 'Customer Residence';
+    final notes = visit['clinical_notes'] ?? visit['notes'] ?? 'Follow clinical protocol';
 
     return Scaffold(
       appBar: AppBar(
@@ -319,12 +409,12 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      visit['patient_name'] ?? 'Patient',
+                      patientName,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Service: ${visit['service_name']}',
+                      'Service: $serviceName',
                       style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600),
                     ),
                     const Divider(height: 20),
@@ -334,7 +424,7 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '${visit['sub_city']} • ${visit['address']}',
+                            '$subCity • $landmark',
                             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ),
@@ -347,7 +437,7 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            visit['notes'] ?? 'Follow clinical protocol',
+                            notes,
                             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ),
@@ -383,7 +473,9 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
             const SizedBox(height: 28),
 
             // Action Buttons based on status
-            if (_visitStatus == 'CONFIRMED') ...[
+            if (_isSubmitting)
+              const Center(child: CircularProgressIndicator())
+            else if (_visitStatus == 'CONFIRMED') ...[
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -430,7 +522,7 @@ class _VisitExecutionScreenState extends State<VisitExecutionScreen> {
                     SizedBox(height: 8),
                     Text('This visit has been completed.', style: TextStyle(fontWeight: FontWeight.bold)),
                     SizedBox(height: 4),
-                    Text('Clinical record filed securely.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    Text('Clinical record filed securely in database.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   ],
                 ),
               ),

@@ -36,6 +36,7 @@ class AppColors {
   static const Color accentWarning = Color(0xFFB4791F);
   static const Color success = Color(0xFF4A7C59);
   static const Color error = Color(0xFF8C2F2F);
+  static const Color errorLight = Color(0xFFFDE8E8);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color border = Color(0xFFE6E9E8);
 }

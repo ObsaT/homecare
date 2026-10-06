@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import 'request_tracking_screen.dart';
 
@@ -65,22 +66,80 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
 
   void _submitBooking() async {
     setState(() => _submitting = true);
-    await Future.delayed(const Duration(seconds: 1)); // simulated network roundtrip
-    setState(() => _submitting = false);
+    final api = ref.read(apiClientProvider);
 
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RequestTrackingScreen(
-          reference: 'REQ-2026-${100000 + DateTime.now().millisecond * 800}',
-          serviceName: _selectedService.replaceAll('_', ' '),
-          status: 'SUBMITTED',
-          caregiverName: null,
-          scheduledTime: '${_selectedDate.year}-${_selectedDate.month}-${_selectedDate.day} at ${_selectedTime.format(context)}',
+    final subCityMap = {
+      'Addis Ketema': '11111111-1111-4111-8111-111111111101',
+      'Akaki Kality': '11111111-1111-4111-8111-111111111102',
+      'Arada': '11111111-1111-4111-8111-111111111103',
+      'Bole': '11111111-1111-4111-8111-111111111104',
+      'Gullele': '11111111-1111-4111-8111-111111111105',
+      'Kirkos': '11111111-1111-4111-8111-111111111106',
+      'Kolfe Keranio': '11111111-1111-4111-8111-111111111107',
+      'Lideta': '11111111-1111-4111-8111-111111111108',
+      'Nifas Silk-Lafto': '11111111-1111-4111-8111-111111111109',
+      'Yeka': '11111111-1111-4111-8111-111111111110',
+      'Lemi Kura': '11111111-1111-4111-8111-111111111111',
+    };
+
+    final subCityId = subCityMap[_selectedSubCity] ?? '11111111-1111-4111-8111-111111111104';
+    final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+    final timeStr = '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
+
+    try {
+      final res = await api.dio.post('/requests', data: {
+        'service_code': _selectedService,
+        'patient_name': _patientNameController.text.trim().isNotEmpty ? _patientNameController.text.trim() : 'Patient',
+        'patient_age': int.tryParse(_patientAgeController.text) ?? 60,
+        'patient_gender': _patientGender,
+        'mobility': _mobility,
+        'sub_city_id': subCityId,
+        'address': _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : '$_selectedSubCity Residence',
+        'landmark': _landmarkController.text.trim().isNotEmpty ? _landmarkController.text.trim() : null,
+        'emergency_contact_name': _emergencyNameController.text.trim().isNotEmpty ? _emergencyNameController.text.trim() : 'Family Contact',
+        'emergency_contact_phone': _emergencyPhoneController.text.trim().isNotEmpty ? _emergencyPhoneController.text.trim() : '+251911000000',
+        'scheduled_date': dateStr,
+        'scheduled_time': timeStr,
+        'duration_minutes': _durationMinutes,
+        'notes': _careNeedsController.text.trim().isNotEmpty ? _careNeedsController.text.trim() : null,
+      });
+
+      setState(() => _submitting = false);
+      if (!mounted) return;
+
+      final data = res.data['data'] ?? {};
+      final reference = (data['reference'] ?? 'REQ-2026-948199').toString();
+      final status = (data['status'] ?? 'SUBMITTED').toString();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Care request $reference created! Dispatched to Addis Ababa dispatch.'),
+          backgroundColor: AppColors.success,
         ),
-      ),
-    );
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RequestTrackingScreen(
+            reference: reference,
+            serviceName: _selectedService.replaceAll('_', ' '),
+            status: status,
+            caregiverName: null,
+            scheduledTime: '$dateStr at $timeStr',
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() => _submitting = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting booking: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   @override

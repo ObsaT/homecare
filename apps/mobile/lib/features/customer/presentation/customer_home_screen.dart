@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'book_care_screen.dart';
 import 'request_tracking_screen.dart';
 
-class CustomerHomeScreen extends ConsumerWidget {
+class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
+
+  @override
+  ConsumerState<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+}
+
+class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
+  List<Map<String, dynamic>> _myRequests = [];
+  bool _loadingRequests = true;
 
   final List<Map<String, dynamic>> services = const [
     {
@@ -82,7 +91,32 @@ class CustomerHomeScreen extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _fetchRequests();
+  }
+
+  Future<void> _fetchRequests() async {
+    setState(() => _loadingRequests = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final res = await api.dio.get('/requests');
+      final data = res.data['data'] as List?;
+      if (data != null) {
+        setState(() {
+          _myRequests = data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+          _loadingRequests = false;
+        });
+      } else {
+        setState(() => _loadingRequests = false);
+      }
+    } catch (_) {
+      setState(() => _loadingRequests = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
@@ -96,162 +130,235 @@ class CustomerHomeScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh Requests',
+            onPressed: _fetchRequests,
+          ),
+          IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () => ref.read(authProvider.notifier).logout(),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Emergency Medical Disclaimer Card (Spec Requirement 9)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFBF2E2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE9C99A)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.emergency_outlined, color: Color(0xFFB4791F), size: 24),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'For medical emergencies, call 907 / 911 or visit the nearest hospital emergency room immediately.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF5A4119), height: 1.3),
+      body: RefreshIndicator(
+        onRefresh: _fetchRequests,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Emergency Medical Disclaimer Card (Spec Requirement 9)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBF2E2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE9C99A)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.emergency_outlined, color: Color(0xFFB4791F), size: 24),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'For medical emergencies, call 907 / 911 or visit the nearest hospital emergency room immediately.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF5A4119), height: 1.3),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Hero Booking CTA
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.primaryHover],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Need Care at Home?',
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Certified nurses and caregivers dispatched directly to your address.',
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: AppColors.primary,
+                              minimumSize: const Size(140, 36),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const BookCareScreen()),
+                              );
+                              _fetchRequests();
+                            },
+                            child: const Text('Request Care Now', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.home_work_rounded, color: Colors.white24, size: 70),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Active / Upcoming Visit Card (Live Production DB)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Active Visit Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  if (_myRequests.isNotEmpty)
+                    Text(
+                      '${_myRequests.length} Active',
+                      style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                    ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
-            // Hero Booking CTA
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryHover],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              if (_loadingRequests)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_myRequests.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
                       children: [
-                        const Text(
-                          'Need Care at Home?',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Certified nurses and caregivers dispatched directly to your address.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: AppColors.primary,
-                            minimumSize: const Size(140, 36),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const BookCareScreen()),
-                            );
-                          },
-                          child: const Text('Request Care Now', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          child: const Icon(Icons.calendar_today_outlined, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('No Active Care Visits', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              SizedBox(height: 2),
+                              Text('Your booked home care visits will appear here in real time.', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.home_work_rounded, color: Colors.white24, size: 70),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+                )
+              else
+                ..._myRequests.map((req) {
+                  final ref = req['reference'] ?? 'REQ';
+                  final service = req['service_name_en'] ?? req['service_code'] ?? 'Home Care';
+                  final status = req['status'] ?? 'SUBMITTED';
+                  final caregiver = req['caregiver_name'];
+                  final time = req['preferred_time'] ?? '10:00 AM';
 
-            // Active / Upcoming Visit Card
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Active Visit Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const RequestTrackingScreen(
-                          reference: 'REQ-2026-948102',
-                          serviceName: 'Wound Care & Dressing',
-                          status: 'CONFIRMED',
-                          caregiverName: 'Sister Almaz (RN)',
-                          scheduledTime: '10:00 AM (Today)',
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RequestTrackingScreen(
+                              reference: ref,
+                              serviceName: service,
+                              status: status,
+                              caregiverName: caregiver,
+                              scheduledTime: time,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14.0),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: status == 'COMPLETED'
+                                      ? AppColors.success.withOpacity(0.1)
+                                      : AppColors.primary.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  status == 'COMPLETED' ? Icons.check_circle : Icons.medical_services_rounded,
+                                  color: status == 'COMPLETED' ? AppColors.success : AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text('$service', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        const Spacer(),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryLight,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            status,
+                                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      caregiver != null ? 'Nurse: $caregiver' : 'Awaiting caregiver assignment',
+                                      style: TextStyle(
+                                        color: caregiver != null ? AppColors.primary : AppColors.accentWarning,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text('$ref • Scheduled: $time', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
+                            ],
+                          ),
                         ),
                       ),
-                    );
-                  },
-                  child: const Text('View Live Tracker', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RequestTrackingScreen(
-                      reference: 'REQ-2026-948102',
-                      serviceName: 'Wound Care & Dressing',
-                      status: 'CONFIRMED',
-                      caregiverName: 'Sister Almaz (RN)',
-                      scheduledTime: '10:00 AM (Today)',
                     ),
-                  ),
-                );
-              },
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_circle_outline, color: AppColors.primary),
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Wound Care • REQ-2026-948102', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            SizedBox(height: 2),
-                            Text('Assigned to Sister Almaz (RN) • Confirmed', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                            SizedBox(height: 2),
-                            Text('Bole Atlas, near Edna Mall • 10:00 AM', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+                  );
+                }),
             const SizedBox(height: 24),
 
             // Services Grid
@@ -317,6 +424,7 @@ class CustomerHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

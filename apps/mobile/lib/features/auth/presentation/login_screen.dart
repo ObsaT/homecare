@@ -24,12 +24,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Spacer(),
+              const SizedBox(height: 16),
               // App Logo / Icon
               Center(
                 child: Container(
@@ -65,7 +65,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: AppColors.textSecondary,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 24),
 
               // Role selection selector for demo
               Container(
@@ -129,6 +129,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 24),
 
+              if (authState.errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    authState.errorMessage!,
+                    style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
               if (!_otpSent) ...[
                 const Text(
                   'Enter Phone Number',
@@ -150,19 +167,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ],
                       ),
                     ),
-                    hintText: '911234567',
+                    hintText: '911555555',
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: authState.isLoading
                       ? null
                       : () async {
-                          final success = await ref
-                              .read(authProvider.notifier)
-                              .requestOtp('+251${_phoneController.text.replaceFirst(RegExp(r'^0'), '')}');
-                          if (success) {
-                            setState(() => _otpSent = true);
+                          final phoneNormalized = '+251${_phoneController.text.replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '')}';
+                          // Try password login first with demo default password
+                          final ok = await ref.read(authProvider.notifier).loginWithPassword(phoneNormalized, 'Admin@Addis2026!');
+                          if (!ok) {
+                            final otpSuccess = await ref.read(authProvider.notifier).requestOtp(phoneNormalized);
+                            if (otpSuccess) setState(() => _otpSent = true);
                           }
                         },
                   child: authState.isLoading
@@ -171,7 +189,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Text('Send SMS Code'),
+                      : const Text('Sign In With Account'),
+                ),
+                const SizedBox(height: 20),
+
+                // Quick Demo Real Account Sign-In
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Instant Production Sign-In (Real DB):',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_selectedRole == UserRole.caregiver) ...[
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.medical_services_outlined, size: 16),
+                          label: const Text('Sister Almaz (RN - Bole Base)', style: TextStyle(fontSize: 12)),
+                          onPressed: () => ref.read(authProvider.notifier).loginWithPassword('+251911111111', 'Admin@Addis2026!'),
+                        ),
+                        const SizedBox(height: 6),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.location_city_outlined, size: 16),
+                          label: const Text('Dawit Kebede (Nurse - Yeka Base)', style: TextStyle(fontSize: 12)),
+                          onPressed: () => ref.read(authProvider.notifier).loginWithPassword('+251911222222', 'Admin@Addis2026!'),
+                        ),
+                      ] else ...[
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.person_outline, size: 16),
+                          label: const Text('Abebe Bikila (Customer - Bole)', style: TextStyle(fontSize: 12)),
+                          onPressed: () => ref.read(authProvider.notifier).loginWithPassword('+251911555555', 'Admin@Addis2026!'),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ] else ...[
                 const Text(
@@ -214,7 +272,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: const Text('Change Phone Number'),
                 ),
               ],
-              const Spacer(),
+              const SizedBox(height: 24),
               const Text(
                 'Target market: Addis Ababa • In-Home Health Care',
                 textAlign: TextAlign.center,
