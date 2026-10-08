@@ -114,8 +114,11 @@
       } catch (e) {
         console.warn('Web notification failed:', e);
       }
+    window.flutterConfiguration = {
+      canvasKitBaseUrl: "canvaskit/"
     };
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
+
