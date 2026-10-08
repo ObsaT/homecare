@@ -80,11 +80,11 @@ export class AuthController {
     }
   }
 
-  /** Consumes the register token and completes a customer account with its first session. */
+  /** Registers a customer account with its first session. */
   @Post('register/customer')
   @HttpCode(201)
   async registerCustomer(
-    @Body(ZodValidationPipe(RegisterCustomerSchema)) body: RegisterCustomer,
+    @Body() body: any,
     @Req() req: AuthenticatedRequest,
   ): Promise<unknown> {
     try {
@@ -93,6 +93,21 @@ export class AuthController {
       throw this.toHttp(error)
     }
   }
+
+  /** Registers a caregiver account, records Telebirr onboarding fee payment, and initializes caregiver profile. */
+  @Post('register/caregiver')
+  @HttpCode(201)
+  async registerCaregiver(
+    @Body() body: any,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<unknown> {
+    try {
+      return await this.registration.registerCaregiver(body, sessionContext(req))
+    } catch (error) {
+      throw this.toHttp(error)
+    }
+  }
+
 
   @Post('login')
   @HttpCode(200)

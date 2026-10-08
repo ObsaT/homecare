@@ -23,4 +23,10 @@ export class CatalogController {
     const minutes = durationMinutes ? parseInt(durationMinutes, 10) : 60
     return { data: await this.catalog.calculateQuote(serviceCode, minutes) }
   }
+
+  @Get('pricing/registration-fee')
+  async getRegistrationFee() {
+    return { data: await this.catalog.getCaregiverRegistrationFee() }
+  }
 }
+

@@ -83,4 +83,22 @@ export class AdminController {
   ) {
     return { data: await this.catalog.updateCustomQuote(requestId, body) }
   }
+
+  @Get('settings/registration-fee')
+  async getRegistrationFee() {
+    return { data: await this.admin.getRegistrationFee() }
+  }
+
+  @Post('settings/registration-fee')
+  async updateRegistrationFee(
+    @Body() body: { fee_etb: number; description?: string },
+  ) {
+    return { data: await this.admin.updateRegistrationFee(body.fee_etb, body.description) }
+  }
+
+  @Get('caregiver-registration-payments')
+  async listCaregiverRegistrationPayments() {
+    return { data: await this.admin.listCaregiverRegistrationPayments() }
+  }
 }
+

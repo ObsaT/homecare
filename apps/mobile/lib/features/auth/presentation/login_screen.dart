@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
+import 'register_customer_screen.dart';
+import 'register_caregiver_screen.dart';
+
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -225,7 +228,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         )
                       : const Text('Sign In With Account'),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
+                if (_selectedRole == UserRole.caregiver) ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF0072BC), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Color(0xFF0072BC)),
+                    label: const Text(
+                      'Register Caregiver (with Telebirr)',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RegisterCaregiverScreen()),
+                      );
+                    },
+                  ),
+                ] else ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.primary, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.person_add_outlined, size: 18, color: AppColors.primary),
+                    label: const Text(
+                      'New Patient? Register Customer Account',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RegisterCustomerScreen()),
+                      );
+                    },
+                  ),
+                ],
+                const SizedBox(height: 20),
+
 
                 // Quick Production One-Tap Sign In
                 Container(

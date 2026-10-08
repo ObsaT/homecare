@@ -223,7 +223,172 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(user: updated);
     }
   }
+
+  Future<Map<String, dynamic>> getRegistrationFee() async {
+    try {
+      final res = await _api.dio.get('/pricing/registration-fee');
+      final data = res.data['data'] ?? res.data;
+      return {
+        'fee_etb': (data['fee_etb'] as num?)?.toDouble() ?? 500.0,
+        'currency': data['currency'] ?? 'ETB',
+        'description': data['description'] ?? 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+      };
+    } catch (_) {
+      return {
+        'fee_etb': 500.0,
+        'currency': 'ETB',
+        'description': 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+      };
+    }
+  }
+
+  Future<bool> registerCustomer({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String subCity,
+    String? woreda,
+    String? houseNumber,
+    String? landmark,
+    String? emergencyName,
+    String? emergencyPhone,
+    String? emergencyRel,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final phoneDigits = phone.trim().replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '');
+      final phoneNormalized = '+251$phoneDigits';
+
+      final res = await _api.dio.post('/auth/register/customer', data: {
+        'full_name': fullName.trim(),
+        'phone_e164': phoneNormalized,
+        'password': password.trim(),
+        'sub_city_name': subCity,
+        'woreda': woreda?.trim() ?? '01',
+        'house_number': houseNumber?.trim() ?? 'House 101',
+        'landmark': landmark?.trim() ?? '',
+        'emergency_contact_name': emergencyName?.trim() ?? 'Family Contact',
+        'emergency_contact_phone': emergencyPhone?.trim() ?? phoneNormalized,
+        'emergency_contact_relationship': emergencyRel?.trim() ?? 'Family',
+      });
+
+      final data = res.data;
+      final token = data['access_token'] ?? data['data']?['access_token'];
+      if (token == null) {
+        state = state.copyWith(isLoading: false, errorMessage: 'Registration succeeded but no token returned');
+        return false;
+      }
+      _api.setToken(token.toString());
+
+      final rawUser = data['user'] ?? data['data']?['user'] ?? {};
+      final user = AppUser(
+        id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164'] ?? phoneNormalized,
+        fullName: rawUser['full_name'] ?? fullName,
+        role: UserRole.customer,
+        isAvailable: true,
+      );
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('hc_auth_token', token.toString());
+        await prefs.setString('hc_user_id', user.id);
+        await prefs.setString('hc_user_phone', user.phone);
+        await prefs.setString('hc_user_name', user.fullName);
+        await prefs.setString('hc_user_role', 'CUSTOMER');
+      } catch (_) {}
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: true,
+        token: token.toString(),
+        user: user,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Registration failed. Phone may already be registered or network issue.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> registerCaregiver({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String professionalTitle,
+    required String qualificationLevel,
+    String? licenceNumber,
+    int? yearsExperience,
+    required String subCity,
+    required String telebirrPhone,
+    required String telebirrReference,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final phoneDigits = phone.trim().replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '');
+      final phoneNormalized = '+251$phoneDigits';
+
+      final res = await _api.dio.post('/auth/register/caregiver', data: {
+        'full_name': fullName.trim(),
+        'phone_e164': phoneNormalized,
+        'password': password.trim(),
+        'professional_title': professionalTitle.trim(),
+        'qualification_level': qualificationLevel.trim(),
+        'licence_number': licenceNumber?.trim() ?? 'MOH/PENDING',
+        'years_experience': yearsExperience ?? 2,
+        'home_sub_city_name': subCity,
+        'payment_method': 'TELEBIRR',
+        'telebirr_phone': telebirrPhone.trim(),
+        'telebirr_reference': telebirrReference.trim(),
+        'confirm_sample_payment': true,
+      });
+
+      final data = res.data;
+      final token = data['access_token'] ?? data['data']?['access_token'];
+      if (token == null) {
+        state = state.copyWith(isLoading: false, errorMessage: 'Caregiver registration succeeded but no token returned');
+        return false;
+      }
+      _api.setToken(token.toString());
+
+      final rawUser = data['user'] ?? data['data']?['user'] ?? {};
+      final user = AppUser(
+        id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164'] ?? phoneNormalized,
+        fullName: rawUser['full_name'] ?? fullName,
+        role: UserRole.caregiver,
+        isAvailable: true,
+      );
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('hc_auth_token', token.toString());
+        await prefs.setString('hc_user_id', user.id);
+        await prefs.setString('hc_user_phone', user.phone);
+        await prefs.setString('hc_user_name', user.fullName);
+        await prefs.setString('hc_user_role', 'CAREGIVER');
+      } catch (_) {}
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: true,
+        token: token.toString(),
+        user: user,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Caregiver registration failed. Phone may already be registered or network error.',
+      );
+      return false;
+    }
+  }
 }
+
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final api = ref.watch(apiClientProvider);

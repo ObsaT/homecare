@@ -324,4 +324,34 @@ export class CatalogService {
       currency: 'ETB',
     }
   }
+
+  async getCaregiverRegistrationFee(): Promise<{
+    fee_etb: number
+    fee_santim: number
+    currency: string
+    description: string
+  }> {
+    try {
+      const { rows } = await this.pool.query(
+        `select setting_value from fin.system_settings where setting_key = 'caregiver_registration_fee'`,
+      )
+      if (rows.length > 0 && rows[0].setting_value) {
+        const val = rows[0].setting_value
+        return {
+          fee_etb: Number(val.fee_etb) || 500,
+          fee_santim: Number(val.fee_santim) || (Number(val.fee_etb) || 500) * 100,
+          currency: val.currency || 'ETB',
+          description: val.description || 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+        }
+      }
+    } catch (_) {}
+
+    return {
+      fee_etb: 500,
+      fee_santim: 50000,
+      currency: 'ETB',
+      description: 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+    }
+  }
 }
+

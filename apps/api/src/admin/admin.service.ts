@@ -186,6 +186,7 @@ export class AdminService {
       select
         u.id, u.full_name, u.phone_e164, u.status as account_status, u.is_available,
         cp.approval_status, cp.professional_title, cp.qualification_level,
+        coalesce(cp.registration_fee_paid, true) as registration_fee_paid,
         cp.rating_avg, cp.rating_count, cp.completed_visits,
         cp.home_sub_city_id,
         hsc.name_en as home_sub_city,
@@ -333,4 +334,78 @@ export class AdminService {
       client.release()
     }
   }
+
+  async getRegistrationFee() {
+    const { rows } = await this.pool.query(
+      `select setting_value, updated_at from fin.system_settings where setting_key = 'caregiver_registration_fee'`,
+    )
+    if (rows.length > 0 && rows[0].setting_value) {
+      const val = rows[0].setting_value
+      return {
+        fee_etb: Number(val.fee_etb) || 500,
+        fee_santim: Number(val.fee_santim) || (Number(val.fee_etb) || 500) * 100,
+        currency: val.currency || 'ETB',
+        description: val.description || 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+        updated_at: rows[0].updated_at,
+      }
+    }
+    return {
+      fee_etb: 500,
+      fee_santim: 50000,
+      currency: 'ETB',
+      description: 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+      updated_at: new Date().toISOString(),
+    }
+  }
+
+  async updateRegistrationFee(feeEtb: number, description?: string) {
+    const feeSantim = Math.round(feeEtb * 100)
+    const payload = {
+      fee_etb: feeEtb,
+      fee_santim: feeSantim,
+      currency: 'ETB',
+      description: description || 'Standard Caregiver Clinical Onboarding & Telebirr Verification Fee',
+    }
+
+    await this.pool.query(
+      `insert into fin.system_settings (setting_key, setting_value, updated_at)
+       values ('caregiver_registration_fee', $1, now())
+       on conflict (setting_key)
+       do update set setting_value = $1, updated_at = now()`,
+      [JSON.stringify(payload)],
+    )
+
+    return payload
+  }
+
+  async listCaregiverRegistrationPayments() {
+    const query = `
+      select
+        p.id,
+        p.amount_santim,
+        (p.amount_santim / 100)::numeric as amount_etb,
+        p.method,
+        p.provider,
+        p.status,
+        p.provider_reference,
+        p.customer_reference,
+        p.notes,
+        p.created_at,
+        p.confirmed_at,
+        u.id as caregiver_id,
+        u.full_name as caregiver_name,
+        u.phone_e164 as caregiver_phone,
+        cp.professional_title,
+        cp.qualification_level,
+        cp.approval_status
+      from fin.payments p
+      join auth.users u on u.id = p.customer_user_id
+      left join ops.caregiver_profiles cp on cp.user_id = u.id
+      where p.payment_type = 'CAREGIVER_REGISTRATION'
+      order by p.created_at desc
+    `
+    const { rows } = await this.pool.query(query)
+    return rows
+  }
 }
+

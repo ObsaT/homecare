@@ -41,7 +41,9 @@ interface CaregiverData {
   notification_radius_km?: number;
   service_area_notes?: string;
   coverage_sub_cities?: SubCityItem[];
+  registration_fee_paid?: boolean;
 }
+
 
 export default function CaregiversPage() {
   const [caregivers, setCaregivers] = useState<CaregiverData[]>([]);
@@ -148,7 +150,15 @@ export default function CaregiversPage() {
                   </div>
                   <div>
                     <h3 className="font-bold text-base text-[#151A19]">{cg.full_name}</h3>
-                    <p className="text-xs text-[#5A6360]">{cg.professional_title || 'Clinical Caregiver'}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      <p className="text-xs text-[#5A6360]">{cg.professional_title || 'Clinical Caregiver'}</p>
+                      {cg.registration_fee_paid && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                          <CheckCircle className="w-2.5 h-2.5 text-blue-600" />
+                          Telebirr Fee Paid
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <span
