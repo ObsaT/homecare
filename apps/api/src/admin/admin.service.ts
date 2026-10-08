@@ -1,10 +1,14 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
+import { EventsService } from '../events/events.service'
 
 @Injectable()
 export class AdminService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(EventsService) private readonly eventsService: EventsService,
+  ) {}
 
   async getDashboardSummary() {
     const today = new Date().toISOString().slice(0, 10)
@@ -131,7 +135,37 @@ export class AdminService {
         [appt.request_id],
       )
 
+      // Fetch details for real-time notification
+      const detailRes = await client.query(
+        `select s.name_en as service_name, p.full_name as patient_name,
+                coalesce(sc.name_en, a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city') as sub_city_name,
+                coalesce(a.address_snapshot->>'landmark', r.address_snapshot->>'landmark') as landmark,
+                a.price_santim
+         from ops.appointments a
+         join ops.requests r on r.id = a.request_id
+         join catalog.services s on s.id = a.service_id
+         join clinical.patients p on p.id = r.patient_id
+         left join catalog.sub_cities sc on lower(sc.name_en) = lower(coalesce(a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city'))
+         where a.id = $1`,
+        [appointmentId],
+      )
+      const detail = detailRes.rows[0]
+
       await client.query('commit')
+
+      if (detail) {
+        this.eventsService.emitToUser(caregiverId, 'NEW_OFFER', {
+          appointment_id: appointmentId,
+          request_id: appt.request_id,
+          service_name: detail.service_name,
+          patient_name: detail.patient_name,
+          sub_city: detail.sub_city_name || 'Addis Ababa',
+          landmark: detail.landmark || null,
+          price_santim: detail.price_santim,
+          created_at: new Date().toISOString(),
+        })
+      }
+
       return { success: true, message: 'Caregiver assigned and assignment offer dispatched' }
     } catch (err) {
       await client.query('rollback')

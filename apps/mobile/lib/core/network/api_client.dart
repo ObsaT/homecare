@@ -45,6 +45,9 @@ class ApiClient {
     restoreToken();
   }
 
+  String? get token => _authToken;
+  String get baseUrl => dio.options.baseUrl;
+
   void setToken(String? token) {
     _authToken = token;
   }

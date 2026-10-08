@@ -12,6 +12,7 @@ import { CaregiverModule } from './caregiver/caregiver.module'
 import { ReviewsModule } from './reviews/reviews.module'
 import { AdminModule } from './admin/admin.module'
 import { PaymentsModule } from './payments/payments.module'
+import { EventsModule } from './events/events.module'
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PaymentsModule } from './payments/payments.module'
     ReviewsModule,
     AdminModule,
     PaymentsModule,
+    EventsModule,
   ],
   providers: [
     // Global, so no controller can accidentally leak a raw error by forgetting a try/catch.

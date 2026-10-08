@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/audio_notification_service.dart';
+import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'visit_execution_screen.dart';
@@ -15,6 +18,8 @@ class CaregiverHomeScreen extends ConsumerStatefulWidget {
 class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
   bool _isLoading = true;
   bool _isAvailable = true;
+  bool _isRealtimeConnected = false;
+  StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _offers = [];
   List<Map<String, dynamic>> _upcomingVisits = [];
@@ -23,6 +28,206 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
   void initState() {
     super.initState();
     _fetchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AudioNotificationService.requestNotificationPermission();
+      _initRealtimeListener();
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _initRealtimeListener() {
+    try {
+      final realtime = ref.read(realtimeEventsServiceProvider);
+      realtime.connect();
+      _realtimeSubscription?.cancel();
+      _realtimeSubscription = realtime.stream.listen((event) {
+        _handleRealtimeEvent(event);
+      });
+      if (mounted) {
+        setState(() => _isRealtimeConnected = true);
+      }
+    } catch (_) {}
+  }
+
+  void _handleRealtimeEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString();
+    final data = event['data'] is Map ? Map<String, dynamic>.from(event['data'] as Map) : <String, dynamic>{};
+
+    if (type == 'NEW_OFFER') {
+      // 1. Play audible dual-tone dispatch chime
+      AudioNotificationService.playChime();
+
+      // 2. Trigger browser push notification
+      final patientName = data['patient_name']?.toString() ?? 'Care Patient';
+      final serviceName = data['service_name']?.toString() ?? 'Home Visit';
+      final subCity = data['sub_city']?.toString() ?? 'Addis Ababa';
+      AudioNotificationService.showNotification(
+        title: '🚨 New Care Visit Request!',
+        body: '$serviceName for $patientName in $subCity',
+      );
+
+      // 3. Refresh offers list immediately
+      _fetchData();
+
+      // 4. Show in-app animated dispatch alert dialog
+      if (mounted) {
+        _showNewOfferAlertModal(data);
+      }
+    } else if (type == 'VISIT_STATUS_CHANGED' || type == 'OFFER_ACCEPTED' || type == 'OFFER_DECLINED') {
+      _fetchData();
+    }
+  }
+
+  void _showNewOfferAlertModal(Map<String, dynamic> data) {
+    final appointmentId = data['appointment_id']?.toString() ?? '';
+    final serviceName = data['service_name']?.toString() ?? 'Urgent Care Request';
+    final patientName = data['patient_name']?.toString() ?? 'Addis Patient';
+    final subCity = data['sub_city']?.toString() ?? 'Addis Ababa';
+    final landmark = data['landmark']?.toString();
+    final priceSantim = data['price_santim'] is num ? data['price_santim'] as num : 0;
+    final priceEtb = data['price_etb'] != null ? data['price_etb'] : (priceSantim / 100).round();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.notifications_active_rounded, color: AppColors.error, size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'NEW VISIT OFFER!',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.error, letterSpacing: 0.5),
+                  ),
+                  Text(
+                    'Location Matched Dispatch',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    serviceName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Patient: $patientName',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '$subCity${landmark != null ? ' • $landmark' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Payout for Visit:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      Text(
+                        '$priceEtb ETB',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      if (appointmentId.isNotEmpty) {
+                        _declineOffer(appointmentId);
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      if (appointmentId.isNotEmpty) {
+                        _acceptOffer(appointmentId);
+                      }
+                    },
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('Accept Visit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchData() async {
@@ -144,6 +349,25 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.volume_up_rounded, color: AppColors.primary),
+            tooltip: 'Test Dispatch Alert Sound & Chime',
+            onPressed: () {
+              AudioNotificationService.playChime();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.volume_up_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text('🔊 Dual-tone dispatch chime tested!'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh Feed',
             onPressed: _fetchData,
@@ -163,6 +387,67 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Real-Time Dispatch Status Pill
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _isRealtimeConnected ? const Color(0xFFECFDF5) : const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isRealtimeConnected
+                        ? const Color(0xFF10B981).withOpacity(0.3)
+                        : const Color(0xFFF59E0B).withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _isRealtimeConnected ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _isRealtimeConnected
+                            ? 'Real-Time Dispatch Live • Instant Sound & Banner Alerts Active'
+                            : 'Connecting Live Dispatch Stream...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _isRealtimeConnected ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        AudioNotificationService.playChime();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('🔔 Sound chime playing...'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      child: const Row(
+                        children: [
+                          Icon(Icons.volume_up_outlined, size: 16, color: Color(0xFF065F46)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Test Tone',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // Duty / Availability Status Banner
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

@@ -26,6 +26,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const http = host.switchToHttp()
     const request = http.getRequest<Request & { requestId?: string }>()
     const response = http.getResponse<Response>()
+    if (response.headersSent) return
     const requestId = request.requestId ?? 'unknown'
 
     const { status, code, message, fields, meta } = this.describe(exception, request.url)

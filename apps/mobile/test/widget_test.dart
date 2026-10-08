@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:homecare_mobile/main.dart';
 import 'package:homecare_mobile/core/network/api_client.dart';
+import 'package:homecare_mobile/core/services/audio_notification_service.dart';
+import 'package:homecare_mobile/core/services/realtime_events_service.dart';
 import 'package:homecare_mobile/features/auth/models/user.dart';
 
 void main() {
@@ -72,6 +74,30 @@ void main() {
       };
       final customer = AppUser.fromJson(customerJson);
       expect(customer.role, UserRole.customer);
+    });
+
+    test('AudioNotificationService methods invoke safely across platforms', () {
+      expect(() => AudioNotificationService.playChime(), returnsNormally);
+      expect(() => AudioNotificationService.requestNotificationPermission(), returnsNormally);
+      expect(
+        () => AudioNotificationService.showNotification(
+          title: 'Test Dispatch Alert',
+          body: 'Care request for patient in Bole',
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('RealtimeEventsService connects and handles lifecycle cleanly', () {
+      final client = ApiClient(baseUrl: 'http://localhost:3000/api/v1');
+      client.setToken('jwt-caregiver-sample');
+      expect(client.token, 'jwt-caregiver-sample');
+      expect(client.baseUrl, 'http://localhost:3000/api/v1');
+
+      final realtime = RealtimeEventsService(client);
+      expect(() => realtime.connect(), returnsNormally);
+      expect(() => realtime.disconnect(), returnsNormally);
+      expect(() => realtime.dispose(), returnsNormally);
     });
   });
 }

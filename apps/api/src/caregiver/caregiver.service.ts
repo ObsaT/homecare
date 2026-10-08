@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
+import { EventsService } from '../events/events.service'
 
 export interface CompleteVisitInput {
   observations?: string
@@ -22,7 +23,10 @@ export interface CompleteVisitInput {
 
 @Injectable()
 export class CaregiverService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(EventsService) private readonly eventsService: EventsService,
+  ) {}
 
   async getProfile(caregiverUserId: string) {
     const query = `
@@ -146,14 +150,30 @@ export class CaregiverService {
       )
 
       // Update parent request to CONFIRMED
-      await client.query(
+      const reqRes = await client.query(
         `update ops.requests
          set status = 'CONFIRMED', updated_at = now()
-         where id = (select request_id from ops.appointments where id = $1)`,
+         where id = (select request_id from ops.appointments where id = $1)
+         returning id, customer_user_id, reference`,
         [appointmentId],
       )
 
       await client.query('commit')
+
+      if (reqRes.rows[0]) {
+        this.eventsService.emitToUser(reqRes.rows[0].customer_user_id, 'VISIT_STATUS_CHANGED', {
+          appointment_id: appointmentId,
+          request_id: reqRes.rows[0].id,
+          reference: reqRes.rows[0].reference,
+          status: 'CONFIRMED',
+          message: 'Caregiver has accepted the assignment offer.',
+        })
+      }
+      this.eventsService.emitToRole('ADMIN', 'OFFER_ACCEPTED', {
+        appointment_id: appointmentId,
+        caregiver_id: caregiverUserId,
+      })
+
       return { success: true, status: 'CONFIRMED', message: 'Assignment accepted' }
     } catch (err) {
       await client.query('rollback')
@@ -188,6 +208,10 @@ export class CaregiverService {
       )
 
       await client.query('commit')
+      this.eventsService.emitToRole('ADMIN', 'OFFER_DECLINED', {
+        appointment_id: appointmentId,
+        caregiver_id: caregiverUserId,
+      })
       return { success: true, message: 'Assignment declined' }
     } catch (err) {
       await client.query('rollback')
@@ -209,14 +233,26 @@ export class CaregiverService {
         [appointmentId, caregiverUserId],
       )
 
-      await client.query(
+      const reqRes = await client.query(
         `update ops.requests
          set status = 'EN_ROUTE', updated_at = now()
-         where id = (select request_id from ops.appointments where id = $1)`,
+         where id = (select request_id from ops.appointments where id = $1)
+         returning id, customer_user_id, reference`,
         [appointmentId],
       )
 
       await client.query('commit')
+
+      if (reqRes.rows[0]) {
+        this.eventsService.emitToUser(reqRes.rows[0].customer_user_id, 'VISIT_STATUS_CHANGED', {
+          appointment_id: appointmentId,
+          request_id: reqRes.rows[0].id,
+          reference: reqRes.rows[0].reference,
+          status: 'EN_ROUTE',
+          message: 'Caregiver is en route to your address.',
+        })
+      }
+
       return { success: true, status: 'EN_ROUTE', message: 'Caregiver en route' }
     } catch (err) {
       await client.query('rollback')
@@ -238,14 +274,26 @@ export class CaregiverService {
         [lat || null, lng || null, appointmentId, caregiverUserId],
       )
 
-      await client.query(
+      const reqRes = await client.query(
         `update ops.requests
          set status = 'IN_PROGRESS', updated_at = now()
-         where id = (select request_id from ops.appointments where id = $1)`,
+         where id = (select request_id from ops.appointments where id = $1)
+         returning id, customer_user_id, reference`,
         [appointmentId],
       )
 
       await client.query('commit')
+
+      if (reqRes.rows[0]) {
+        this.eventsService.emitToUser(reqRes.rows[0].customer_user_id, 'VISIT_STATUS_CHANGED', {
+          appointment_id: appointmentId,
+          request_id: reqRes.rows[0].id,
+          reference: reqRes.rows[0].reference,
+          status: 'IN_PROGRESS',
+          message: 'Caregiver has arrived and started the visit.',
+        })
+      }
+
       return { success: true, status: 'IN_PROGRESS', arrival_at: new Date().toISOString() }
     } catch (err) {
       await client.query('rollback')
@@ -274,10 +322,11 @@ export class CaregiverService {
       const appt = apptRes.rows[0]
 
       // 2. Update request to COMPLETED
-      await client.query(
+      const reqRes = await client.query(
         `update ops.requests
          set status = 'COMPLETED', updated_at = now()
-         where id = $1`,
+         where id = $1
+         returning id, customer_user_id, reference`,
         [appt.request_id],
       )
 
@@ -342,6 +391,19 @@ export class CaregiverService {
       )
 
       await client.query('commit')
+      if (reqRes.rows[0]) {
+        this.eventsService.emitToUser(reqRes.rows[0].customer_user_id, 'VISIT_STATUS_CHANGED', {
+          appointment_id: appointmentId,
+          request_id: reqRes.rows[0].id,
+          reference: reqRes.rows[0].reference,
+          status: 'COMPLETED',
+          message: 'Care visit has been completed successfully.',
+        })
+      }
+      this.eventsService.emitToRole('ADMIN', 'VISIT_COMPLETED', {
+        appointment_id: appointmentId,
+        caregiver_id: caregiverUserId,
+      })
       return { success: true, status: 'COMPLETED', visit_record_id: visitRecordId }
     } catch (err) {
       await client.query('rollback')

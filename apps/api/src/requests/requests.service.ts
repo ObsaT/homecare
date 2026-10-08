@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
+import { EventsService } from '../events/events.service'
 
 export interface CreateBookingInput {
   service_code: string
@@ -24,7 +25,10 @@ export interface CreateBookingInput {
 
 @Injectable()
 export class RequestsService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(EventsService) private readonly eventsService: EventsService,
+  ) {}
 
   async createRequest(customerUserId: string, input: CreateBookingInput) {
     const client = await this.pool.connect()
@@ -33,7 +37,7 @@ export class RequestsService {
 
       // 1. Resolve service
       const serviceRes = await client.query(
-        `select s.id, s.billing_unit, coalesce(sp.amount_santim, 50000)::bigint as amount_santim
+        `select s.id, s.name_en, s.name_am, s.code, s.billing_unit, coalesce(sp.amount_santim, 50000)::bigint as amount_santim
          from catalog.services s
          left join catalog.service_prices sp on sp.service_id = s.id and sp.effective_to is null
          where s.code = $1 and s.is_active = true limit 1`,
@@ -197,13 +201,73 @@ export class RequestsService {
         ],
       )
 
+      // 9. Location-based Auto-Dispatch to matched caregivers
+      const cgRes = await client.query(
+        `select u.id, u.full_name, u.phone_e164
+         from auth.users u
+         join ops.caregiver_profiles cp on cp.user_id = u.id
+         where u.role = 'CAREGIVER' and u.is_available = true and cp.approval_status = 'APPROVED'
+           and ($1::uuid is null or cp.home_sub_city_id = $1 or $1 = any(cp.coverage_sub_city_ids))
+         order by (case when cp.home_sub_city_id = $1 then 1 else 2 end), cp.rating_avg desc nulls last
+         limit 3`,
+        [input.sub_city_id || null],
+      )
+
+      const matchedCaregivers = cgRes.rows
+      if (matchedCaregivers.length > 0) {
+        const expiresAt = new Date(Date.now() + 2 * 3600 * 1000)
+        for (const cg of matchedCaregivers) {
+          await client.query(
+            `insert into ops.assignments (appointment_id, caregiver_id, status, expires_at)
+             values ($1, $2, 'OFFERED', $3)`,
+            [appointment.id, cg.id, expiresAt.toISOString()],
+          )
+        }
+        await client.query(
+          `update ops.appointments set status = 'OFFERED', updated_at = now() where id = $1`,
+          [appointment.id],
+        )
+        await client.query(
+          `update ops.requests set status = 'ASSIGNED', updated_at = now() where id = $1`,
+          [request.id],
+        )
+      }
+
       await client.query('commit')
+
+      // 10. Real-time notifications emitted after transaction commit
+      for (const cg of matchedCaregivers) {
+        this.eventsService.emitToUser(cg.id, 'NEW_OFFER', {
+          appointment_id: appointment.id,
+          request_id: request.id,
+          reference: request.reference,
+          service_name: service.name_en,
+          service_code: service.code,
+          patient_name: input.patient_name || 'Patient',
+          sub_city: addressSnapshot.sub_city_id || 'Addis Ababa',
+          landmark: input.landmark || null,
+          price_santim: priceSantim,
+          scheduled_date: schedDate,
+          scheduled_time: schedTime,
+          duration_minutes: input.duration_minutes || 120,
+          clinical_notes: input.notes || 'Care visit requested',
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      this.eventsService.emitToRole('ADMIN', 'NEW_REQUEST', {
+        reference: request.reference,
+        patient_name: input.patient_name,
+        service_name: service.name_en,
+        matched_caregivers_count: matchedCaregivers.length,
+      })
 
       return {
         ...request,
         appointment,
         price_santim: priceSantim,
         currency: 'ETB',
+        matched_caregivers_count: matchedCaregivers.length,
       }
     } catch (err) {
       await client.query('rollback')

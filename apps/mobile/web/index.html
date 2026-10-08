@@ -41,6 +41,83 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!-- Dispatch Chime & Web Notification Engine -->
+  <script>
+    var _hcAudioCtx = null;
+    function _getAudioContext() {
+      if (!_hcAudioCtx) {
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          _hcAudioCtx = new AudioCtx();
+        }
+      }
+      if (_hcAudioCtx && _hcAudioCtx.state === 'suspended') {
+        _hcAudioCtx.resume();
+      }
+      return _hcAudioCtx;
+    }
+
+    // Auto-unlock audio context on first user interaction
+    ['click', 'touchstart', 'keydown'].forEach(function(evt) {
+      window.addEventListener(evt, function() {
+        _getAudioContext();
+      }, { once: false, passive: true });
+    });
+
+    window.playHomecareChime = function() {
+      try {
+        var ctx = _getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+
+        // Note 1: 880 Hz (A5)
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, now);
+        gain1.gain.setValueAtTime(0.35, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // Note 2: 1318.5 Hz (E6)
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(1318.5, now + 0.16);
+        gain2.gain.setValueAtTime(0.4, now + 0.16);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.16);
+        osc2.stop(now + 0.65);
+      } catch (e) {
+        console.warn('Unable to play audio chime:', e);
+      }
+    };
+
+    window.requestHomecareNotificationPermission = function() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    };
+
+    window.showHomecareWebNotification = function(title, body) {
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, {
+            body: body,
+            icon: 'favicon.png',
+            tag: 'hc-dispatch-' + Date.now()
+          });
+        }
+      } catch (e) {
+        console.warn('Web notification failed:', e);
+      }
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -3,9 +3,10 @@ import { AdminController } from './admin.controller'
 import { AdminService } from './admin.service'
 import { AuthModule } from '../auth/auth.module'
 import { CatalogModule } from '../catalog/catalog.module'
+import { EventsModule } from '../events/events.module'
 
 @Module({
-  imports: [AuthModule, CatalogModule],
+  imports: [AuthModule, CatalogModule, EventsModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],
