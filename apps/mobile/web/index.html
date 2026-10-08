@@ -64,35 +64,33 @@
       }, { once: false, passive: true });
     });
 
+    function _playTone(ctx, freq, type, start, duration, gainVal) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(gainVal || 0.4, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + duration);
+    }
+
     window.playHomecareChime = function() {
       try {
         var ctx = _getAudioContext();
         if (!ctx) return;
         var now = ctx.currentTime;
 
-        // Note 1: 880 Hz (A5)
-        var osc1 = ctx.createOscillator();
-        var gain1 = ctx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, now);
-        gain1.gain.setValueAtTime(0.35, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.35);
+        // Sequence 1: Ascending paging chime (D5 587Hz -> A5 880Hz -> D6 1174Hz)
+        _playTone(ctx, 587.33, 'triangle', now, 0.22, 0.45);
+        _playTone(ctx, 880.00, 'sine', now + 0.12, 0.32, 0.50);
+        _playTone(ctx, 1174.66, 'sine', now + 0.24, 0.42, 0.55);
 
-        // Note 2: 1318.5 Hz (E6)
-        var osc2 = ctx.createOscillator();
-        var gain2 = ctx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(1318.5, now + 0.16);
-        gain2.gain.setValueAtTime(0.4, now + 0.16);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.16);
-        osc2.stop(now + 0.65);
+        // Sequence 2: Echo confirmation bell (A5 880Hz -> E6 1318Hz)
+        _playTone(ctx, 880.00, 'triangle', now + 0.50, 0.22, 0.40);
+        _playTone(ctx, 1318.51, 'sine', now + 0.62, 0.48, 0.52);
       } catch (e) {
         console.warn('Unable to play audio chime:', e);
       }

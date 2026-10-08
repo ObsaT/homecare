@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '../lib/auth-context';
+import { WebSocketProvider } from '../lib/websocket-context';
 import { AuthGuard } from '../lib/auth-guard';
 import { AdminShell } from '../lib/admin-shell';
 
@@ -18,9 +19,11 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#F7F8F7] text-[#151A19]">
         <AuthProvider>
-          <AuthGuard>
-            <AdminShell>{children}</AdminShell>
-          </AuthGuard>
+          <WebSocketProvider>
+            <AuthGuard>
+              <AdminShell>{children}</AdminShell>
+            </AuthGuard>
+          </WebSocketProvider>
         </AuthProvider>
       </body>
     </html>

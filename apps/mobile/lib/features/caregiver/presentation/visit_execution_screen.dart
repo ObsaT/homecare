@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/route_map_card.dart';
 
 class VisitExecutionScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> visit;
@@ -396,6 +397,21 @@ class _VisitExecutionScreenState extends ConsumerState<VisitExecutionScreen> {
                     const Text('Active Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+
+            // Live Route & Google Maps Navigation
+            RouteMapCard(
+              originTitle: 'Caregiver Station',
+              destinationTitle: subCity,
+              destinationLandmark: landmark,
+              destLat: visit['address_snapshot'] is Map && visit['address_snapshot']['latitude'] != null
+                  ? (visit['address_snapshot']['latitude'] as num).toDouble()
+                  : null,
+              destLng: visit['address_snapshot'] is Map && visit['address_snapshot']['longitude'] != null
+                  ? (visit['address_snapshot']['longitude'] as num).toDouble()
+                  : null,
+              originAddress: 'Addis Ababa Care Station',
             ),
             const SizedBox(height: 16),
 

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './auth-context';
+import { useDashboardWebSocket } from './websocket-context';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -17,6 +18,10 @@ import {
   Building2,
   Menu,
   X,
+  Bell,
+  Volume2,
+  Radio,
+  CheckCircle2,
 } from 'lucide-react';
 
 const navItems = [
@@ -31,7 +36,9 @@ const navItems = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { isConnected, notifications, unreadCount, markAllAsRead, clearNotifications, playAlertSound } = useDashboardWebSocket();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const isLoginPage = pathname === '/login';
 
@@ -139,15 +146,103 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </button>
 
             <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75`} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             </span>
-            <span className="text-xs font-semibold text-[#2D3748] truncate">
-              Dispatch Desk Live
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-[#2D3748] truncate">
+                Dispatch Desk Live
+              </span>
+              <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Radio className={`w-3 h-3 ${isConnected ? 'text-emerald-600' : 'text-amber-500 animate-pulse'}`} />
+                {isConnected ? 'WebSocket Real-Time' : 'Connecting WS...'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 text-xs text-[#5A6360]">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-[#5A6360]">
+            {/* Test Alert Sound Button */}
+            <button
+              onClick={playAlertSound}
+              title="Test Dispatch Chime Audio"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-700 transition"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-[#0F6B5C]" />
+              <span className="hidden md:inline font-medium text-[11px]">Test Sound</span>
+            </button>
+
+            {/* Notification Bell with Badge & Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen((v) => !v)}
+                title="Notifications"
+                className="relative p-2 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-700 transition"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-600 text-white font-bold text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Popover Panel */}
+              {notifOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in-50 slide-in-from-top-2 duration-150">
+                  <div className="p-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-[#0F6B5C]" />
+                      <span className="font-bold text-xs text-gray-900">Live Notifications</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                        {notifications.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="text-[11px] text-[#0F6B5C] hover:underline font-medium"
+                        >
+                          Mark read
+                        </button>
+                      )}
+                      <button
+                        onClick={clearNotifications}
+                        className="text-[11px] text-gray-400 hover:text-gray-600"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400 text-xs">
+                        No notifications yet. Waiting for live events...
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`p-3 text-xs transition ${
+                            n.read ? 'bg-white opacity-80' : 'bg-emerald-50/40 border-l-2 border-[#0F6B5C]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-900">{n.title}</span>
+                            <span className="text-[10px] text-gray-400">
+                              {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mt-0.5">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="hidden sm:flex items-center gap-1.5 bg-gray-100 px-2.5 py-1 rounded-md text-gray-700 font-medium">
               <Building2 className="w-3.5 h-3.5 text-gray-500" />
               <span>11 Sub-Cities</span>

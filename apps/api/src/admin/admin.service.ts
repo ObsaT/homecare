@@ -140,6 +140,9 @@ export class AdminService {
         `select s.name_en as service_name, p.full_name as patient_name,
                 coalesce(sc.name_en, a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city') as sub_city_name,
                 coalesce(a.address_snapshot->>'landmark', r.address_snapshot->>'landmark') as landmark,
+                coalesce(a.address_snapshot->>'address', r.address_snapshot->>'address', 'Patient Residence') as address,
+                coalesce(nullif(a.address_snapshot->>'latitude', ''), nullif(r.address_snapshot->>'latitude', ''), '9.0105')::numeric as latitude,
+                coalesce(nullif(a.address_snapshot->>'longitude', ''), nullif(r.address_snapshot->>'longitude', ''), '38.7891')::numeric as longitude,
                 a.price_santim
          from ops.appointments a
          join ops.requests r on r.id = a.request_id
@@ -160,7 +163,10 @@ export class AdminService {
           service_name: detail.service_name,
           patient_name: detail.patient_name,
           sub_city: detail.sub_city_name || 'Addis Ababa',
+          address: detail.address,
           landmark: detail.landmark || null,
+          latitude: Number(detail.latitude) || 9.0105,
+          longitude: Number(detail.longitude) || 38.7891,
           price_santim: detail.price_santim,
           created_at: new Date().toISOString(),
         })

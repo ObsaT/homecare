@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:homecare_mobile/main.dart';
 import 'package:homecare_mobile/core/network/api_client.dart';
 import 'package:homecare_mobile/core/services/audio_notification_service.dart';
+import 'package:homecare_mobile/core/services/map_launcher_service.dart';
 import 'package:homecare_mobile/core/services/realtime_events_service.dart';
 import 'package:homecare_mobile/features/auth/models/user.dart';
 
@@ -98,6 +99,32 @@ void main() {
       expect(() => realtime.connect(), returnsNormally);
       expect(() => realtime.disconnect(), returnsNormally);
       expect(() => realtime.dispose(), returnsNormally);
+    });
+
+    test('MapLauncherService builds valid Google Maps navigation URLs and calculations', () {
+      final url = MapLauncherService.buildGoogleMapsDirectionsUrl(
+        destLat: 9.0016,
+        destLng: 38.7852,
+        originLat: 9.0105,
+        originLng: 38.7617,
+      );
+      expect(url, contains('https://www.google.com/maps/dir/?api=1'));
+      expect(url, contains('destination=9.0016,38.7852'));
+      expect(url, contains('origin=9.0105,38.7617'));
+      expect(url, contains('travelmode=driving'));
+
+      // Test distance calculation between Bole and central Addis
+      final distance = MapLauncherService.calculateDistanceKm(9.0105, 38.7617, 9.0016, 38.7852);
+      expect(distance, greaterThan(1.0));
+      expect(distance, lessThan(10.0));
+
+      final driveTime = MapLauncherService.estimateDrivingMinutes(distance);
+      expect(driveTime, greaterThanOrEqualTo(8));
+
+      // Test sub-city coordinates resolution
+      final boleCoords = MapLauncherService.getSubCityCoords('Bole Sub-City');
+      expect(boleCoords, isNotNull);
+      expect(boleCoords![0], closeTo(9.0016, 0.01));
     });
   });
 }

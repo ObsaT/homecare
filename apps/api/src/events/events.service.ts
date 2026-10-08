@@ -45,6 +45,10 @@ export class EventsService {
     })
   }
 
+  getEvents$(): Observable<AppRealtimeEvent> {
+    return this.eventSubject.asObservable()
+  }
+
   subscribeForUser(userId?: string, role?: string): Observable<MessageEvent> {
     return this.eventSubject.asObservable().pipe(
       filter(event => {

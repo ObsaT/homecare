@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/audio_notification_service.dart';
+import '../../../core/services/map_launcher_service.dart';
 import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/route_map_card.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'visit_execution_screen.dart';
 
@@ -89,8 +91,12 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
     final patientName = data['patient_name']?.toString() ?? 'Addis Patient';
     final subCity = data['sub_city']?.toString() ?? 'Addis Ababa';
     final landmark = data['landmark']?.toString();
+    final address = data['address']?.toString() ?? landmark ?? subCity;
+    final destLat = data['latitude'] is num ? (data['latitude'] as num).toDouble() : null;
+    final destLng = data['longitude'] is num ? (data['longitude'] as num).toDouble() : null;
     final priceSantim = data['price_santim'] is num ? data['price_santim'] as num : 0;
     final priceEtb = data['price_etb'] != null ? data['price_etb'] : (priceSantim / 100).round();
+    final caregiverStation = _profile?['home_sub_city']?.toString() ?? 'Bole Sub-City (Station)';
 
     showDialog(
       context: context,
@@ -109,7 +115,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
               ),
               child: const Icon(Icons.notifications_active_rounded, color: AppColors.error, size: 28),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,106 +131,118 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                 ],
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.volume_up_rounded, color: AppColors.primary),
+              tooltip: 'Replay Dispatch Chime',
+              onPressed: () => AudioNotificationService.playChime(),
+            ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    serviceName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Patient: $patientName',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primary),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '$subCity${landmark != null ? ' • $landmark' : ''}',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Payout for Visit:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      Text(
-                        '$priceEtb ETB',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      if (appointmentId.isNotEmpty) {
-                        _declineOffer(appointmentId);
-                      }
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Decline'),
+                // Service & Payout Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        serviceName,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Patient: $patientName',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Payout for Visit:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          Text(
+                            '$priceEtb ETB',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      if (appointmentId.isNotEmpty) {
-                        _acceptOffer(appointmentId);
-                      }
-                    },
-                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('Accept Visit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(height: 14),
+
+                // Live Route & Google Maps GPS Navigation Card
+                RouteMapCard(
+                  originTitle: caregiverStation,
+                  destinationTitle: '$subCity, Addis Ababa',
+                  destinationLandmark: address,
+                  destLat: destLat,
+                  destLng: destLng,
+                  originAddress: caregiverStation,
+                  compact: true,
+                ),
+                const SizedBox(height: 16),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          if (appointmentId.isNotEmpty) {
+                            _declineOffer(appointmentId);
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('Decline'),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          if (appointmentId.isNotEmpty) {
+                            _acceptOffer(appointmentId);
+                          }
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Accept Visit'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -699,7 +717,21 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                             Text(scheduled, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                        RouteMapCard(
+                          originTitle: homeSubCity,
+                          destinationTitle: subCity,
+                          destinationLandmark: landmark,
+                          destLat: offer['address_snapshot'] is Map && offer['address_snapshot']['latitude'] != null
+                              ? (offer['address_snapshot']['latitude'] as num).toDouble()
+                              : null,
+                          destLng: offer['address_snapshot'] is Map && offer['address_snapshot']['longitude'] != null
+                              ? (offer['address_snapshot']['longitude'] as num).toDouble()
+                              : null,
+                          originAddress: homeSubCity,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 14),
                         Row(
                           children: [
                             Expanded(
