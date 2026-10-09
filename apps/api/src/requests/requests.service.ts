@@ -336,21 +336,41 @@ export class RequestsService {
         `update ops.requests
          set status = 'CANCELLED', cancelled_at = now(), cancel_reason = $1, cancelled_by_role = 'CUSTOMER'
          where id = $2 and customer_user_id = $3
-         returning id, status`,
+         returning id, status, reference`,
         [reason || 'Cancelled by customer', requestId, customerUserId],
       )
       if (reqRes.rows.length === 0) {
         throw new NotFoundException('Request not found')
       }
 
-      await client.query(
+      const apptRes = await client.query(
         `update ops.appointments
          set status = 'CANCELLED', cancel_reason = $1, cancelled_by_role = 'CUSTOMER'
-         where request_id = $2`,
+         where request_id = $2
+         returning id, caregiver_id`,
         [reason || 'Cancelled by customer', requestId],
       )
 
       await client.query('commit')
+
+      if (reqRes.rows[0]) {
+        this.eventsService.emitToRole('ADMIN', 'REQUEST_CANCELLED', {
+          request_id: requestId,
+          reference: reqRes.rows[0].reference,
+          reason: reason || 'Cancelled by customer',
+          status: 'CANCELLED',
+        })
+      }
+
+      if (apptRes.rows[0]?.caregiver_id) {
+        this.eventsService.emitToUser(apptRes.rows[0].caregiver_id, 'REQUEST_CANCELLED', {
+          appointment_id: apptRes.rows[0].id,
+          request_id: requestId,
+          reference: reqRes.rows[0]?.reference,
+          message: 'Patient has cancelled this care visit request.',
+        })
+      }
+
       return { success: true, message: 'Request cancelled successfully' }
     } catch (err) {
       await client.query('rollback')

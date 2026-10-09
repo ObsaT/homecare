@@ -326,6 +326,18 @@ export class AdminService {
       }
 
       await client.query('commit')
+
+      this.eventsService.emitToRole('ADMIN', 'CAREGIVER_APPROVAL_UPDATED', {
+        caregiver_id: caregiverId,
+        approval_status: status,
+      })
+
+      this.eventsService.emitToUser(caregiverId, 'CAREGIVER_APPROVAL_UPDATED', {
+        caregiver_id: caregiverId,
+        approval_status: status,
+        message: status === 'APPROVED' ? 'Your clinical credentials have been verified and approved!' : `Your profile status is ${status}`,
+      })
+
       return { success: true, approval_status: status }
     } catch (err) {
       await client.query('rollback')

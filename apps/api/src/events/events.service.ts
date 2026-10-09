@@ -3,8 +3,26 @@ import { Subject, Observable } from 'rxjs'
 import { filter, map } from 'rxjs/operators'
 import type { MessageEvent } from '@nestjs/common'
 
+export type RealtimeEventType =
+  | 'NEW_OFFER'
+  | 'OFFER_ACCEPTED'
+  | 'OFFER_DECLINED'
+  | 'VISIT_STATUS_CHANGED'
+  | 'VISIT_COMPLETED'
+  | 'NEW_REQUEST'
+  | 'REQUEST_CANCELLED'
+  | 'PAYMENT_CLAIM_SUBMITTED'
+  | 'PAYMENT_CONFIRMED'
+  | 'CAREGIVER_AVAILABILITY_CHANGED'
+  | 'CAREGIVER_REGISTERED'
+  | 'CUSTOMER_REGISTERED'
+  | 'REVIEW_SUBMITTED'
+  | 'QUOTE_UPDATED'
+  | 'CAREGIVER_APPROVAL_UPDATED'
+  | 'HEARTBEAT'
+
 export interface AppRealtimeEvent {
-  type: 'NEW_OFFER' | 'OFFER_ACCEPTED' | 'OFFER_DECLINED' | 'VISIT_STATUS_CHANGED' | 'VISIT_COMPLETED' | 'NEW_REQUEST' | 'HEARTBEAT'
+  type: RealtimeEventType
   targetUserId?: string
   targetRole?: 'CAREGIVER' | 'CUSTOMER' | 'ADMIN'
   data: Record<string, unknown>

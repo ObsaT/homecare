@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
+import { EventsService } from '../events/events.service'
 
 export interface PaymentClaimInput {
   amount_santim: number
@@ -11,7 +12,10 @@ export interface PaymentClaimInput {
 
 @Injectable()
 export class PaymentsService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(EventsService) private readonly eventsService: EventsService,
+  ) {}
 
   async listCustomerInvoices(customerUserId: string) {
     const query = `
@@ -37,7 +41,7 @@ export class PaymentsService {
       await client.query('begin')
 
       const invRes = await client.query(
-        `select id, total_santim, status from fin.invoices where id = $1 and customer_user_id = $2`,
+        `select id, total_santim, status, invoice_number from fin.invoices where id = $1 and customer_user_id = $2`,
         [invoiceId, customerUserId],
       )
       if (invRes.rows.length === 0) {
@@ -66,7 +70,26 @@ export class PaymentsService {
       )
       const payment = payRes.rows[0]
 
+      const custRes = await client.query(
+        `select full_name, phone_e164 from auth.users where id = $1`,
+        [customerUserId],
+      )
+      const customer = custRes.rows[0]
+
       await client.query('commit')
+
+      this.eventsService.emitToRole('ADMIN', 'PAYMENT_CLAIM_SUBMITTED', {
+        payment_id: payment.id,
+        invoice_id: invoiceId,
+        invoice_number: inv.invoice_number,
+        amount_santim: payment.amount_santim,
+        amount_etb: Math.round(Number(payment.amount_santim) / 100),
+        method: payment.method,
+        customer_reference: input.customer_reference,
+        customer_name: customer?.full_name || 'Customer',
+        customer_phone: customer?.phone_e164 || '',
+      })
+
       return {
         ...payment,
         message: 'Your payment claim has been submitted. Our finance team will verify it against the statement.',
@@ -111,7 +134,7 @@ export class PaymentsService {
         `update fin.payments
          set status = 'CONFIRMED', confirmed_by = $1, confirmed_at = now(), notes = coalesce(notes, '') || ' ' || coalesce($2, '')
          where id = $3
-         returning id, invoice_id, amount_santim`,
+         returning id, invoice_id, amount_santim, customer_user_id`,
         [adminUserId, note || '', paymentId],
       )
       if (payRes.rows.length === 0) {
@@ -129,6 +152,24 @@ export class PaymentsService {
       }
 
       await client.query('commit')
+
+      this.eventsService.emitToRole('ADMIN', 'PAYMENT_CONFIRMED', {
+        payment_id: paymentId,
+        invoice_id: payment.invoice_id,
+        amount_santim: payment.amount_santim,
+        status: 'CONFIRMED',
+      })
+
+      if (payment.customer_user_id) {
+        this.eventsService.emitToUser(payment.customer_user_id, 'PAYMENT_CONFIRMED', {
+          payment_id: paymentId,
+          invoice_id: payment.invoice_id,
+          amount_santim: payment.amount_santim,
+          status: 'PAID',
+          message: 'Your payment has been verified and confirmed by finance.',
+        })
+      }
+
       return { success: true, status: 'CONFIRMED', message: 'Payment confirmed and invoice marked as PAID' }
     } catch (err) {
       await client.query('rollback')

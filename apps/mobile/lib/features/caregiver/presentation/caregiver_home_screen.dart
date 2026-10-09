@@ -80,6 +80,37 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
       if (mounted) {
         _showNewOfferAlertModal(data);
       }
+    } else if (type == 'REQUEST_CANCELLED' || type == 'OFFER_CANCELLED') {
+      _fetchData();
+      if (mounted) {
+        final reason = data['cancellation_reason'] ?? data['reason'] ?? 'Customer cancelled the request';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Notice: A care request was cancelled ($reason)')),
+              ],
+            ),
+            backgroundColor: AppColors.textSecondary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (type == 'CAREGIVER_APPROVAL_UPDATED') {
+      _fetchData();
+      AudioNotificationService.playChime();
+      if (mounted) {
+        final status = data['approval_status']?.toString() ?? 'APPROVED';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Your caregiver approval status has been updated: $status'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } else if (type == 'VISIT_STATUS_CHANGED' || type == 'OFFER_ACCEPTED' || type == 'OFFER_DECLINED') {
       _fetchData();
     }

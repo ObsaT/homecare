@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
+import { EventsService } from '../events/events.service'
 
 export interface ServiceItem {
   id: string
@@ -61,7 +62,10 @@ export interface UpdateServiceInput {
 
 @Injectable()
 export class CatalogService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(EventsService) private readonly eventsService: EventsService,
+  ) {}
 
   async listServices(includeInactive = false): Promise<ServiceItem[]> {
     const query = `
@@ -266,7 +270,31 @@ export class CatalogService {
         [requestId, input.price_santim],
       )
 
+      const reqRes = await client.query(
+        `select customer_user_id, reference from ops.requests where id = $1`,
+        [requestId],
+      )
+      const reqRow = reqRes.rows[0]
+
       await client.query('commit')
+
+      this.eventsService.emitToRole('ADMIN', 'QUOTE_UPDATED', {
+        request_id: requestId,
+        reference: reqRow?.reference,
+        price_santim: input.price_santim,
+        duration_minutes: input.duration_minutes,
+      })
+
+      if (reqRow?.customer_user_id) {
+        this.eventsService.emitToUser(reqRow.customer_user_id, 'QUOTE_UPDATED', {
+          request_id: requestId,
+          reference: reqRow.reference,
+          price_santim: input.price_santim,
+          duration_minutes: input.duration_minutes,
+          message: 'A clinical coordinator has updated the quote for your requested care service.',
+        })
+      }
+
       return { success: true, request_id: requestId, price_santim: input.price_santim }
     } catch (err) {
       await client.query('rollback')

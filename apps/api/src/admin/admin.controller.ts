@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import { CatalogService, type CreateServiceInput, type UpdateServiceInput } from '../catalog/catalog.service'
+import { ReviewsService } from '../reviews/reviews.service'
 import { JwtAuthGuard, type AuthenticatedUser } from '../auth/jwt-auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 
@@ -10,6 +11,7 @@ export class AdminController {
   constructor(
     @Inject(AdminService) private readonly admin: AdminService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(ReviewsService) private readonly reviews: ReviewsService,
   ) {}
 
   @Get('dashboard/summary')
@@ -99,6 +101,11 @@ export class AdminController {
   @Get('caregiver-registration-payments')
   async listCaregiverRegistrationPayments() {
     return { data: await this.admin.listCaregiverRegistrationPayments() }
+  }
+
+  @Get('reviews')
+  async listReviews() {
+    return { data: await this.reviews.listAllReviews() }
   }
 }
 

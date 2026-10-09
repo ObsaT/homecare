@@ -59,10 +59,18 @@ export class CaregiverService {
   }
 
   async setAvailability(caregiverUserId: string, isAvailable: boolean) {
-    await this.pool.query(
-      `update auth.users set is_available = $1, updated_at = now() where id = $2`,
+    const res = await this.pool.query(
+      `update auth.users set is_available = $1, updated_at = now() where id = $2 returning full_name`,
       [isAvailable, caregiverUserId],
     )
+    const name = res.rows[0]?.full_name || 'Caregiver'
+
+    this.eventsService.emitToRole('ADMIN', 'CAREGIVER_AVAILABILITY_CHANGED', {
+      caregiver_id: caregiverUserId,
+      caregiver_name: name,
+      is_available: isAvailable,
+    })
+
     return { is_available: isAvailable }
   }
 

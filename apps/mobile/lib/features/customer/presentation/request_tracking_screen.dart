@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/audio_notification_service.dart';
+import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
 import 'review_visit_screen.dart';
 
-class RequestTrackingScreen extends StatefulWidget {
+class RequestTrackingScreen extends ConsumerStatefulWidget {
+  final String? requestId;
+  final String? appointmentId;
   final String reference;
   final String serviceName;
   final String status;
@@ -11,6 +17,8 @@ class RequestTrackingScreen extends StatefulWidget {
 
   const RequestTrackingScreen({
     super.key,
+    this.requestId,
+    this.appointmentId,
     required this.reference,
     required this.serviceName,
     required this.status,
@@ -19,11 +27,13 @@ class RequestTrackingScreen extends StatefulWidget {
   });
 
   @override
-  State<RequestTrackingScreen> createState() => _RequestTrackingScreenState();
+  ConsumerState<RequestTrackingScreen> createState() => _RequestTrackingScreenState();
 }
 
-class _RequestTrackingScreenState extends State<RequestTrackingScreen> {
+class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
   late String _currentStatus;
+  String? _caregiverName;
+  StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
 
   final List<Map<String, String>> _statusSteps = const [
     {'key': 'SUBMITTED', 'title': 'Requested', 'desc': 'Request received by Addis Ababa dispatch'},
@@ -39,6 +49,69 @@ class _RequestTrackingScreenState extends State<RequestTrackingScreen> {
   void initState() {
     super.initState();
     _currentStatus = widget.status;
+    _caregiverName = widget.caregiverName;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initRealtimeListener();
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _initRealtimeListener() {
+    try {
+      final realtime = ref.read(realtimeEventsServiceProvider);
+      _realtimeSubscription?.cancel();
+      _realtimeSubscription = realtime.stream.listen((event) {
+        final type = event['type']?.toString();
+        final data = event['data'] is Map ? Map<String, dynamic>.from(event['data'] as Map) : <String, dynamic>{};
+
+        final eventReqId = data['request_id']?.toString();
+        final eventApptId = data['appointment_id']?.toString();
+        final eventRef = data['reference']?.toString();
+
+        final matches = (widget.requestId != null && widget.requestId == eventReqId) ||
+            (widget.appointmentId != null && widget.appointmentId == eventApptId) ||
+            (widget.reference.isNotEmpty && widget.reference == eventRef);
+
+        if (matches) {
+          if (type == 'VISIT_STATUS_CHANGED' || type == 'OFFER_ACCEPTED' || type == 'VISIT_COMPLETED') {
+            final newStatus = data['status']?.toString();
+            final cgName = data['caregiver_name']?.toString();
+            if (newStatus != null && mounted) {
+              setState(() {
+                _currentStatus = newStatus;
+                if (cgName != null && cgName.isNotEmpty) {
+                  _caregiverName = cgName;
+                }
+              });
+              AudioNotificationService.playChime();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Visit status updated: $newStatus'),
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          } else if (type == 'REQUEST_CANCELLED') {
+            if (mounted) {
+              setState(() => _currentStatus = 'CANCELLED');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('This care request was cancelled.'),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        }
+      });
+    } catch (_) {}
   }
 
   int get _stepIndex {
@@ -85,7 +158,7 @@ class _RequestTrackingScreenState extends State<RequestTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor();
-    final caregiverName = widget.caregiverName ?? 'Sister Almaz Hailu (RN)';
+    final caregiverName = _caregiverName ?? widget.caregiverName ?? 'Assigned Nurse / Caregiver';
 
     return Scaffold(
       appBar: AppBar(
@@ -333,7 +406,7 @@ class _RequestTrackingScreenState extends State<RequestTrackingScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => ReviewVisitScreen(
-                          appointmentId: widget.reference,
+                          appointmentId: widget.appointmentId ?? widget.reference,
                           caregiverName: caregiverName,
                           serviceName: widget.serviceName,
                         ),

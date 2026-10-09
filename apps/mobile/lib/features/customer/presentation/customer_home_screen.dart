@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/audio_notification_service.dart';
+import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'book_care_screen.dart';
@@ -16,6 +19,7 @@ class CustomerHomeScreen extends ConsumerStatefulWidget {
 class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   List<Map<String, dynamic>> _myRequests = [];
   bool _loadingRequests = true;
+  StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
 
   final List<Map<String, dynamic>> services = const [
     {
@@ -94,6 +98,87 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   void initState() {
     super.initState();
     _fetchRequests();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AudioNotificationService.requestNotificationPermission();
+      _initRealtimeListener();
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _initRealtimeListener() {
+    try {
+      final realtime = ref.read(realtimeEventsServiceProvider);
+      realtime.connect();
+      _realtimeSubscription?.cancel();
+      _realtimeSubscription = realtime.stream.listen((event) {
+        _handleRealtimeEvent(event);
+      });
+    } catch (_) {}
+  }
+
+  void _handleRealtimeEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString();
+    final data = event['data'] is Map ? Map<String, dynamic>.from(event['data'] as Map) : <String, dynamic>{};
+
+    if (type == 'VISIT_STATUS_CHANGED' ||
+        type == 'OFFER_ACCEPTED' ||
+        type == 'QUOTE_UPDATED' ||
+        type == 'PAYMENT_CONFIRMED' ||
+        type == 'REQUEST_CANCELLED') {
+      AudioNotificationService.playChime();
+      _fetchRequests();
+
+      if (mounted) {
+        String title = 'Care Visit Update';
+        String msg = data['message']?.toString() ?? 'Status updated for your home care visit.';
+        if (type == 'VISIT_STATUS_CHANGED') {
+          final status = data['status']?.toString() ?? 'UPDATED';
+          if (status == 'CONFIRMED') {
+            title = '🎉 Caregiver Confirmed!';
+            msg = '${data['caregiver_name'] ?? 'Your caregiver'} has accepted your care visit.';
+          } else if (status == 'EN_ROUTE') {
+            title = '🚗 Caregiver On The Way!';
+            msg = '${data['caregiver_name'] ?? 'Your caregiver'} is travelling to your location.';
+          } else if (status == 'IN_PROGRESS') {
+            title = '🩺 Visit Started';
+            msg = 'Caregiver has arrived and started the session.';
+          } else if (status == 'COMPLETED') {
+            title = '✅ Visit Completed';
+            msg = 'Your care session has been completed. Review is now open.';
+          }
+        } else if (type == 'QUOTE_UPDATED') {
+          title = '📋 Custom Quote Updated';
+          msg = 'Admin updated the service quote to ETB ${(num.tryParse(data['quote_price_santim']?.toString() ?? '0') ?? 0) / 100}.';
+        } else if (type == 'PAYMENT_CONFIRMED') {
+          title = '💳 Payment Verified';
+          msg = 'Your payment of ETB ${data['amount_etb'] ?? ''} has been verified.';
+        } else if (type == 'REQUEST_CANCELLED') {
+          title = 'Request Cancelled';
+          msg = 'Your request has been cancelled.';
+        }
+
+        AudioNotificationService.showNotification(title: title, body: msg);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text('$title: $msg')),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _fetchRequests() async {
@@ -288,6 +373,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => RequestTrackingScreen(
+                              requestId: req['id']?.toString(),
+                              appointmentId: req['appointment_id']?.toString(),
                               reference: ref,
                               serviceName: service,
                               status: status,
@@ -295,7 +382,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                               scheduledTime: time,
                             ),
                           ),
-                        );
+                        ).then((_) => _fetchRequests());
                       },
                       child: Card(
                         child: Padding(

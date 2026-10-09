@@ -161,6 +161,70 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 data,
               );
               break;
+            case 'REQUEST_CANCELLED':
+              addNotification(
+                type,
+                '❌ Request Cancelled by Patient',
+                `Request ${data.reference || data.request_id || ''}: ${data.reason || 'Cancelled by customer'}`,
+                data,
+              );
+              break;
+            case 'PAYMENT_CLAIM_SUBMITTED':
+              addNotification(
+                type,
+                '💳 Payment Claim Submitted',
+                `${data.customer_name || 'Customer'} submitted ${data.amount_etb || 0} ETB via ${data.method || 'Telebirr'} (Ref: ${data.customer_reference || data.invoice_number || ''})`,
+                data,
+              );
+              break;
+            case 'PAYMENT_CONFIRMED':
+              addNotification(
+                type,
+                '💰 Payment Verified & Reconciled',
+                `Payment verified. Invoice marked as PAID.`,
+                data,
+              );
+              break;
+            case 'CAREGIVER_AVAILABILITY_CHANGED':
+              addNotification(
+                type,
+                data.is_available ? '🩺 Caregiver On-Duty' : '💤 Caregiver Off-Duty',
+                `${data.caregiver_name || 'Caregiver'} is now ${data.is_available ? 'AVAILABLE for dispatches' : 'OFFLINE'}`,
+                data,
+              );
+              break;
+            case 'CAREGIVER_REGISTERED':
+              addNotification(
+                type,
+                '👩‍⚕️ New Caregiver Registered',
+                `${data.full_name || 'Caregiver'} (${data.professional_title || 'Clinical'}) registered in ${data.sub_city || 'Addis Ababa'}. Onboarding fee: ${data.amount_etb || 500} ETB verified.`,
+                data,
+              );
+              break;
+            case 'CUSTOMER_REGISTERED':
+              addNotification(
+                type,
+                '👤 New Customer Registered',
+                `${data.full_name || 'Customer'} created an account (${data.phone_e164 || ''}).`,
+                data,
+              );
+              break;
+            case 'REVIEW_SUBMITTED':
+              addNotification(
+                type,
+                '⭐ New Patient Review & Rating',
+                `${data.customer_name || 'Patient'} gave ${data.caregiver_name || 'Caregiver'} ${data.rating_overall || 5}/5 stars: "${data.comment || 'Service completed'}"`,
+                data,
+              );
+              break;
+            case 'QUOTE_UPDATED':
+              addNotification(
+                type,
+                '📝 Service Quote Updated',
+                `Request ${data.reference || ''} updated to ${(Number(data.price_santim || 0) / 100).toFixed(0)} ETB`,
+                data,
+              );
+              break;
             default:
               break;
           }

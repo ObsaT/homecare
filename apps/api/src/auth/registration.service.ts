@@ -14,6 +14,7 @@ import { UsersRepository } from '../db/users.repository'
 import { REDIS } from '../redis/redis.module'
 import { hashPassword, randomOpaqueToken, sha256Hex } from '../crypto/crypto'
 import { SessionService, type SessionContext } from './session.service'
+import { EventsService } from '../events/events.service'
 import { AuthError } from './errors'
 
 /** Register tokens are short-lived by design: the OTP has already proven the phone. */
@@ -85,6 +86,7 @@ export class RegistrationService {
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(UsersRepository) private readonly users: UsersRepository,
     @Inject(SessionService) private readonly sessions: SessionService,
+    @Inject(EventsService) private readonly eventsService: EventsService,
   ) {}
 
   async issueRegisterToken(
@@ -212,6 +214,14 @@ export class RegistrationService {
       { id: userId, role: UserRole.CUSTOMER, status: 'ACTIVE', full_name: input.full_name },
       context,
     )
+
+    this.eventsService.emitToRole('ADMIN', 'CUSTOMER_REGISTERED', {
+      user_id: userId,
+      full_name: input.full_name,
+      phone_e164: phoneE164,
+      email: input.email || null,
+      created_at: new Date().toISOString(),
+    })
 
     return {
       access_token: session.access_token,
@@ -373,6 +383,19 @@ export class RegistrationService {
       { id: userId, role: UserRole.CAREGIVER, status: 'ACTIVE', full_name: input.full_name },
       context,
     )
+
+    this.eventsService.emitToRole('ADMIN', 'CAREGIVER_REGISTERED', {
+      user_id: userId,
+      full_name: input.full_name,
+      phone_e164: phone,
+      professional_title: input.professional_title,
+      qualification_level: input.qualification_level || 'Clinical Practitioner',
+      sub_city: homeSubCityName,
+      amount_etb: feeEtb,
+      telebirr_reference: telebirrRef,
+      payment_id: paymentId,
+      created_at: new Date().toISOString(),
+    })
 
     return {
       access_token: session.access_token,
