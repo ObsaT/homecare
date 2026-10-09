@@ -158,6 +158,13 @@ export class CaregiverService {
         [appointmentId],
       )
 
+      // Get caregiver name for realtime notifications
+      const cgRes = await client.query(
+        `select full_name from auth.users where id = $1`,
+        [caregiverUserId],
+      )
+      const caregiverName = cgRes.rows[0]?.full_name || 'Caregiver'
+
       await client.query('commit')
 
       if (reqRes.rows[0]) {
@@ -166,12 +173,18 @@ export class CaregiverService {
           request_id: reqRes.rows[0].id,
           reference: reqRes.rows[0].reference,
           status: 'CONFIRMED',
+          caregiver_id: caregiverUserId,
+          caregiver_name: caregiverName,
           message: 'Caregiver has accepted the assignment offer.',
         })
       }
       this.eventsService.emitToRole('ADMIN', 'OFFER_ACCEPTED', {
         appointment_id: appointmentId,
+        request_id: reqRes.rows[0]?.id,
+        reference: reqRes.rows[0]?.reference,
         caregiver_id: caregiverUserId,
+        caregiver_name: caregiverName,
+        status: 'CONFIRMED',
       })
 
       return { success: true, status: 'CONFIRMED', message: 'Assignment accepted' }
@@ -207,10 +220,19 @@ export class CaregiverService {
         [appointmentId],
       )
 
+      // Get caregiver name for realtime notification
+      const cgRes = await client.query(
+        `select full_name from auth.users where id = $1`,
+        [caregiverUserId],
+      )
+      const caregiverName = cgRes.rows[0]?.full_name || 'Caregiver'
+
       await client.query('commit')
       this.eventsService.emitToRole('ADMIN', 'OFFER_DECLINED', {
         appointment_id: appointmentId,
         caregiver_id: caregiverUserId,
+        caregiver_name: caregiverName,
+        reason: reason || 'Caregiver unavailable',
       })
       return { success: true, message: 'Assignment declined' }
     } catch (err) {
@@ -253,6 +275,15 @@ export class CaregiverService {
         })
       }
 
+      this.eventsService.emitToRole('ADMIN', 'VISIT_STATUS_CHANGED', {
+        appointment_id: appointmentId,
+        request_id: reqRes.rows[0]?.id,
+        reference: reqRes.rows[0]?.reference,
+        status: 'EN_ROUTE',
+        caregiver_id: caregiverUserId,
+        message: 'Caregiver is en route to patient address.',
+      })
+
       return { success: true, status: 'EN_ROUTE', message: 'Caregiver en route' }
     } catch (err) {
       await client.query('rollback')
@@ -293,6 +324,15 @@ export class CaregiverService {
           message: 'Caregiver has arrived and started the visit.',
         })
       }
+
+      this.eventsService.emitToRole('ADMIN', 'VISIT_STATUS_CHANGED', {
+        appointment_id: appointmentId,
+        request_id: reqRes.rows[0]?.id,
+        reference: reqRes.rows[0]?.reference,
+        status: 'IN_PROGRESS',
+        caregiver_id: caregiverUserId,
+        message: 'Caregiver has arrived and started the visit.',
+      })
 
       return { success: true, status: 'IN_PROGRESS', arrival_at: new Date().toISOString() }
     } catch (err) {
@@ -402,7 +442,10 @@ export class CaregiverService {
       }
       this.eventsService.emitToRole('ADMIN', 'VISIT_COMPLETED', {
         appointment_id: appointmentId,
+        request_id: reqRes.rows[0]?.id,
+        reference: reqRes.rows[0]?.reference,
         caregiver_id: caregiverUserId,
+        status: 'COMPLETED',
       })
       return { success: true, status: 'COMPLETED', visit_record_id: visitRecordId }
     } catch (err) {

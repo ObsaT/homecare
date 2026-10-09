@@ -184,18 +184,24 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
       timestamp: event.timestamp,
     })
 
+    const STAFF_ROLES = ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'CLINICAL_SUPERVISOR', 'OPERATIONS']
+
     for (const client of this.clients) {
       if (client.ws.readyState !== WebSocket.OPEN) continue
 
+      const clientRole = (client.role || '').toUpperCase()
+      const isStaff = STAFF_ROLES.includes(clientRole)
+
       // Filtering logic
       if (event.targetUserId && client.userId !== event.targetUserId) {
-        // Admin gets visibility into dispatches for real-time dashboard operations
-        if (client.role !== 'ADMIN') continue
+        // Staff get visibility into user notifications for real-time monitoring
+        if (!isStaff) continue
       }
 
       if (event.targetRole) {
-        // Admin receives all role events (caregiver, customer, admin)
-        if (client.role !== event.targetRole && client.role !== 'ADMIN') {
+        if (event.targetRole === 'ADMIN') {
+          if (!isStaff) continue
+        } else if (clientRole !== event.targetRole.toUpperCase() && !isStaff) {
           continue
         }
       }

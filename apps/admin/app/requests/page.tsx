@@ -104,17 +104,35 @@ export default function RequestsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent?: boolean | unknown) => {
+    const isSilent = silent === true;
+    if (!isSilent) setLoading(true);
     const reqsRes = await apiFetch<RequestItem[]>('/admin/requests');
     if (reqsRes.data) {
       setRequests(reqsRes.data);
     }
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   };
 
   useEffect(() => {
     loadData();
+
+    const handleRealtimeUpdate = (e: Event) => {
+      // Instantly refresh requests table when offer accepted or status changed
+      loadData(true);
+    };
+
+    window.addEventListener('hc-realtime-update', handleRealtimeUpdate);
+
+    // Periodic safety poll every 8s
+    const pollInterval = setInterval(() => {
+      loadData(true);
+    }, 8000);
+
+    return () => {
+      window.removeEventListener('hc-realtime-update', handleRealtimeUpdate);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const handleOpenAssignModal = async (req: RequestItem) => {

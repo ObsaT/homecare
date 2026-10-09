@@ -107,6 +107,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           const type = payload.type;
           const data = payload.data || {};
 
+          // Immediately notify all active pages to refresh their UI
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('hc-realtime-update', { detail: { type, data } }));
+          }
+
           switch (type) {
             case 'NEW_REQUEST':
               addNotification(
@@ -128,7 +133,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               addNotification(
                 type,
                 '✅ Assignment Accepted',
-                `Caregiver accepted appointment ${data.appointment_id || ''}`,
+                `${data.caregiver_name ? data.caregiver_name + ' accepted' : 'Caregiver accepted'} request ${data.reference || data.appointment_id || ''}`,
                 data,
               );
               break;
@@ -136,7 +141,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               addNotification(
                 type,
                 '⚠️ Offer Declined',
-                `Caregiver declined appointment ${data.appointment_id || ''}. Reassignment required.`,
+                `${data.caregiver_name ? data.caregiver_name + ' declined' : 'Caregiver declined'} request ${data.reference || data.appointment_id || ''}. Reassignment required.`,
                 data,
               );
               break;
@@ -144,7 +149,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               addNotification(
                 type,
                 '🚗 Visit Status Updated',
-                data.message || `Visit changed to ${data.status || 'NEW_STATUS'}`,
+                data.message || `Visit ${data.reference || ''} status changed to ${data.status || 'NEW_STATUS'}`,
                 data,
               );
               break;
@@ -152,7 +157,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               addNotification(
                 type,
                 '🎉 Visit Completed & Vitals Recorded',
-                `Appointment ${data.appointment_id || ''} completed successfully`,
+                `Appointment ${data.reference || data.appointment_id || ''} completed successfully`,
                 data,
               );
               break;

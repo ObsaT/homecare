@@ -77,8 +77,9 @@ export default function BillingPage() {
   const [feeDescInput, setFeeDescInput] = useState<string>('');
   const [savingFee, setSavingFee] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent?: boolean | unknown) => {
+    const isSilent = silent === true;
+    if (!isSilent) setLoading(true);
     const [claimsRes, cgRes, feeRes] = await Promise.all([
       apiFetch<PaymentClaim[]>('/admin/payments'),
       apiFetch<CaregiverRegistrationPayment[]>('/admin/caregiver-registration-payments'),
@@ -89,14 +90,31 @@ export default function BillingPage() {
     if (cgRes.data) setCaregiverPayments(cgRes.data);
     if (feeRes.data) {
       setFeeSetting(feeRes.data);
-      setFeeInput(String(feeRes.data.fee_etb || 500));
-      setFeeDescInput(feeRes.data.description || '');
+      if (!isSilent) {
+        setFeeInput(String(feeRes.data.fee_etb || 500));
+        setFeeDescInput(feeRes.data.description || '');
+      }
     }
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   };
 
   useEffect(() => {
     loadData();
+
+    const handleRealtimeUpdate = () => {
+      loadData(true);
+    };
+
+    window.addEventListener('hc-realtime-update', handleRealtimeUpdate);
+
+    const pollInterval = setInterval(() => {
+      loadData(true);
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('hc-realtime-update', handleRealtimeUpdate);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const handleConfirm = async (paymentId: string) => {

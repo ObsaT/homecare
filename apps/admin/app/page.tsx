@@ -49,8 +49,9 @@ export default function DashboardPage() {
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent?: boolean | unknown) => {
+    const isSilent = silent === true;
+    if (!isSilent) setLoading(true);
     const [summaryRes, reqsRes] = await Promise.all([
       apiFetch<DashboardSummary>('/admin/dashboard/summary'),
       apiFetch<RecentRequest[]>('/admin/requests'),
@@ -62,11 +63,26 @@ export default function DashboardPage() {
     if (reqsRes.data) {
       setRecentRequests(reqsRes.data);
     }
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   };
 
   useEffect(() => {
     fetchData();
+
+    const handleRealtimeUpdate = () => {
+      fetchData(true);
+    };
+
+    window.addEventListener('hc-realtime-update', handleRealtimeUpdate);
+
+    const pollInterval = setInterval(() => {
+      fetchData(true);
+    }, 8000);
+
+    return () => {
+      window.removeEventListener('hc-realtime-update', handleRealtimeUpdate);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const getStatusBadge = (status: string) => {

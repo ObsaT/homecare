@@ -51,24 +51,40 @@ export default function CaregiversPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const loadCaregivers = async () => {
-    setLoading(true);
+  const loadCaregivers = async (silent?: boolean | unknown) => {
+    const isSilent = silent === true;
+    if (!isSilent) setLoading(true);
     const res = await apiFetch<CaregiverData[]>('/admin/caregivers');
     if (res.data) {
       setCaregivers(res.data);
     }
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   };
 
   const handleApprove = async (id: string) => {
     setActionLoading(id);
     await apiFetch(`/admin/caregivers/${id}/approve`, { method: 'POST' });
     setActionLoading(null);
-    loadCaregivers();
+    loadCaregivers(true);
   };
 
   useEffect(() => {
     loadCaregivers();
+
+    const handleRealtimeUpdate = () => {
+      loadCaregivers(true);
+    };
+
+    window.addEventListener('hc-realtime-update', handleRealtimeUpdate);
+
+    const pollInterval = setInterval(() => {
+      loadCaregivers(true);
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('hc-realtime-update', handleRealtimeUpdate);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const subCitiesList = [
