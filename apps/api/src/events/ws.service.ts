@@ -40,12 +40,14 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
     server.on('upgrade', (request: IncomingMessage, socket, head) => {
       try {
         const url = new URL(request.url ?? '/', 'http://localhost')
-        const pathname = url.pathname
+        const normalizedPath = url.pathname.replace(/\/+$/, '')
 
-        if (pathname === '/ws' || pathname === '/api/v1/ws') {
+        if (normalizedPath === '/ws' || normalizedPath === '/api/v1/ws') {
           this.wss?.handleUpgrade(request, socket, head, (ws) => {
             this.wss?.emit('connection', ws, request)
           })
+        } else {
+          socket.destroy()
         }
       } catch (err) {
         this.logger.error(`WebSocket upgrade error: ${err}`)

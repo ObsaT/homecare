@@ -35,12 +35,15 @@ class RealtimeEventsService {
     _connectInternal();
   }
 
-  void _connectInternal() {
+  Future<void> _connectInternal() async {
     if (_isDisposed || !_shouldReconnect) return;
 
     disconnect(stopReconnect: false);
 
     try {
+      if (_apiClient.token == null || _apiClient.token!.isEmpty) {
+        await _apiClient.restoreToken();
+      }
       final httpUrl = _apiClient.baseUrl;
       final token = _apiClient.token;
       final uri = Uri.parse(httpUrl);

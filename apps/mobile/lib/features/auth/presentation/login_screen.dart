@@ -237,7 +237,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Color(0xFF0072BC)),
                     label: const Text(
-                      'Register Caregiver (with Telebirr)',
+                      'Register Caregiver',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
                     ),
                     onPressed: () {
