@@ -122,6 +122,8 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
       final data = res.data['data'] ?? {};
       final reference = (data['reference'] ?? 'REQ-2026-948199').toString();
       final status = (data['status'] ?? 'SUBMITTED').toString();
+      final requestId = data['id']?.toString();
+      final appointmentId = data['appointment'] is Map ? data['appointment']['id']?.toString() : null;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -134,6 +136,8 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => RequestTrackingScreen(
+            requestId: requestId,
+            appointmentId: appointmentId,
             reference: reference,
             serviceName: _selectedService.replaceAll('_', ' '),
             status: status,

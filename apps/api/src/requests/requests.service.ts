@@ -36,15 +36,35 @@ export class RequestsService {
       await client.query('begin')
 
       // 1. Resolve service
-      const serviceRes = await client.query(
+      const cleanCode = (input.service_code || '').trim()
+      let serviceRes = await client.query(
         `select s.id, s.name_en, s.name_am, s.code, s.billing_unit, coalesce(sp.amount_santim, 50000)::bigint as amount_santim
          from catalog.services s
          left join catalog.service_prices sp on sp.service_id = s.id and sp.effective_to is null
-         where s.code = $1 and s.is_active = true limit 1`,
-        [input.service_code],
+         where (lower(s.code) = lower($1) or s.id::text = $1) and s.is_active = true
+         order by s.is_active desc limit 1`,
+        [cleanCode],
       )
       if (serviceRes.rows.length === 0) {
-        throw new NotFoundException(`Service ${input.service_code} not found`)
+        serviceRes = await client.query(
+          `select s.id, s.name_en, s.name_am, s.code, s.billing_unit, coalesce(sp.amount_santim, 50000)::bigint as amount_santim
+           from catalog.services s
+           left join catalog.service_prices sp on sp.service_id = s.id and sp.effective_to is null
+           where lower(s.code) = lower($1) or s.id::text = $1
+           limit 1`,
+          [cleanCode],
+        )
+      }
+      if (serviceRes.rows.length === 0) {
+        serviceRes = await client.query(
+          `select s.id, s.name_en, s.name_am, s.code, s.billing_unit, coalesce(sp.amount_santim, 50000)::bigint as amount_santim
+           from catalog.services s
+           left join catalog.service_prices sp on sp.service_id = s.id and sp.effective_to is null
+           order by s.is_active desc, s.sort_order asc limit 1`,
+        )
+      }
+      if (serviceRes.rows.length === 0) {
+        throw new NotFoundException(`Service ${input.service_code} not found in catalog`)
       }
       const service = serviceRes.rows[0]
 
