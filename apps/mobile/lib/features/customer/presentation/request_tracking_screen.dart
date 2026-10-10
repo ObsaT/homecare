@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/audio_notification_service.dart';
 import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/visit_chat_bottom_sheet.dart';
 import 'review_visit_screen.dart';
 
 class RequestTrackingScreen extends ConsumerStatefulWidget {
@@ -93,6 +94,56 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                 SnackBar(
                   content: Text('Visit status updated: $newStatus'),
                   backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          } else if (type == 'CHAT_MESSAGE') {
+            AudioNotificationService.playChime();
+            final sender = data['sender_name'] ?? 'Caregiver';
+            final text = data['content'] ?? '';
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('💬 $sender: "$text"'),
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                  action: SnackBarAction(
+                    label: 'REPLY',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      VisitChatBottomSheet.show(
+                        context,
+                        appointmentId: widget.appointmentId,
+                        requestId: widget.requestId,
+                        reference: widget.reference,
+                        counterpartName: _caregiverName ?? widget.caregiverName ?? 'Assigned Caregiver',
+                        isCaregiver: false,
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+          } else if (type == 'EMERGENCY_SOS') {
+            AudioNotificationService.playSosAlarm();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('🚨 EMERGENCY ALERT: ${data['content']}'),
+                  backgroundColor: AppColors.error,
+                  duration: const Duration(seconds: 6),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          } else if (type == 'BROADCAST_ANNOUNCEMENT') {
+            AudioNotificationService.playChime();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('📢 ADVISORY: ${data['content']}'),
+                  backgroundColor: Colors.amber.shade900,
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -270,14 +321,35 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                         ],
                       ),
                     ),
-                    IconButton.filled(
-                      icon: const Icon(Icons.phone_rounded, size: 20),
-                      style: IconButton.styleFrom(backgroundColor: AppColors.primary),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Dialing caregiver phone: +251 91 100 0001')),
-                        );
-                      },
+                    Row(
+                      children: [
+                        IconButton.filled(
+                          icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                          style: IconButton.styleFrom(backgroundColor: AppColors.secondary),
+                          tooltip: 'In-Visit Chat & Quick Updates',
+                          onPressed: () {
+                            VisitChatBottomSheet.show(
+                              context,
+                              appointmentId: widget.appointmentId,
+                              requestId: widget.requestId,
+                              reference: widget.reference,
+                              counterpartName: caregiverName,
+                              isCaregiver: false,
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          icon: const Icon(Icons.phone_rounded, size: 18),
+                          style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+                          tooltip: 'Call Caregiver',
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Dialing caregiver phone: +251 91 100 0001')),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -457,6 +529,22 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.secondary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.forum_rounded, size: 20),
+        label: const Text('Live Comms & SOS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        onPressed: () {
+          VisitChatBottomSheet.show(
+            context,
+            appointmentId: widget.appointmentId,
+            requestId: widget.requestId,
+            reference: widget.reference,
+            counterpartName: caregiverName,
+            isCaregiver: false,
+          );
+        },
       ),
     );
   }

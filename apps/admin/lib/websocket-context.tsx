@@ -56,6 +56,31 @@ function playDashboardChime() {
   }
 }
 
+function playEmergencySiren() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.linearRampToValueAtTime(587, now + 0.2);
+    osc.frequency.linearRampToValueAtTime(880, now + 0.4);
+    osc.frequency.linearRampToValueAtTime(587, now + 0.6);
+    gain.gain.setValueAtTime(0.55, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.85);
+  } catch (e) {
+    console.warn('Emergency audio failed:', e);
+  }
+}
+
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const { token, isAuthenticated } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
@@ -222,6 +247,39 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 type,
                 '📝 Service Quote Updated',
                 `Request ${data.reference || ''} updated to ${(Number(data.price_santim || 0) / 100).toFixed(0)} ETB`,
+                data,
+              );
+              break;
+            case 'EMERGENCY_SOS':
+              playEmergencySiren();
+              addNotification(
+                type,
+                '🚨 EMERGENCY SOS ALARM',
+                `CRITICAL: ${data.sender_name || 'Caregiver'} reported emergency for ${data.patient_name || 'Patient'} (${data.reference || ''}): "${data.content || 'Medical emergency'}"`,
+                data,
+              );
+              break;
+            case 'CHAT_MESSAGE':
+              addNotification(
+                type,
+                `💬 In-Visit Message (${data.sender_role || 'Chat'})`,
+                `${data.sender_name || 'User'} on ${data.reference || 'Visit'}: "${data.content}"`,
+                data,
+              );
+              break;
+            case 'BROADCAST_ANNOUNCEMENT':
+              addNotification(
+                type,
+                '📢 Network Announcement Broadcasted',
+                `${data.content}`,
+                data,
+              );
+              break;
+            case 'ETA_UPDATE':
+              addNotification(
+                type,
+                '⏱️ Live ETA Updated',
+                `${data.sender_name || 'Caregiver'} updated arrival ETA: ${data.content}`,
                 data,
               );
               break;

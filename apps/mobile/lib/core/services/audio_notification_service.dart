@@ -7,6 +7,11 @@ class AudioNotificationService {
     platform.playChime();
   }
 
+  /// Plays an audible emergency SOS siren alarm
+  static void playSosAlarm() {
+    platform.playSiren();
+  }
+
   /// Requests browser permission for native desktop/mobile push notifications
   static void requestNotificationPermission() {
     platform.requestNotificationPermission();

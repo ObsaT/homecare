@@ -7,6 +7,12 @@ void playChime() {
   } catch (_) {}
 }
 
+void playSiren() {
+  try {
+    js.context.callMethod('playHomecareSiren');
+  } catch (_) {}
+}
+
 void requestNotificationPermission() {
   try {
     js.context.callMethod('requestHomecareNotificationPermission');

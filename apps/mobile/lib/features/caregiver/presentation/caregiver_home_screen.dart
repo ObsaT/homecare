@@ -7,6 +7,7 @@ import '../../../core/services/map_launcher_service.dart';
 import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/route_map_card.dart';
+import '../../../core/widgets/visit_chat_bottom_sheet.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'visit_execution_screen.dart';
 
@@ -107,6 +108,44 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
           SnackBar(
             content: Text('🎉 Your caregiver approval status has been updated: $status'),
             backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (type == 'CHAT_MESSAGE') {
+      AudioNotificationService.playChime();
+      if (mounted) {
+        final sender = data['sender_name'] ?? 'Patient/Family';
+        final text = data['content'] ?? '';
+        final ref = data['reference'] ?? 'Visit';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('💬 Message from $sender ($ref): "$text"'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (type == 'EMERGENCY_SOS') {
+      AudioNotificationService.playSosAlarm();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🚨 SOS EMERGENCY: ${data['content']}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 7),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (type == 'BROADCAST_ANNOUNCEMENT') {
+      AudioNotificationService.playChime();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📢 NETWORK ADVISORY: ${data['content']}'),
+            backgroundColor: Colors.amber.shade900,
+            duration: const Duration(seconds: 6),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -875,30 +914,53 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                           const SizedBox(height: 4),
                           Text(scheduled, style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
                           const Divider(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: status == 'COMPLETED' ? AppColors.surface : AppColors.primary,
-                                foregroundColor: status == 'COMPLETED' ? AppColors.textPrimary : Colors.white,
-                                side: status == 'COMPLETED' ? const BorderSide(color: AppColors.border) : null,
-                                minimumSize: const Size(double.infinity, 38),
+                          Row(
+                            children: [
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.secondary,
+                                  side: const BorderSide(color: AppColors.secondary),
+                                  minimumSize: const Size(125, 38),
+                                ),
+                                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                label: const Text('Comms / SOS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                onPressed: () {
+                                  VisitChatBottomSheet.show(
+                                    context,
+                                    appointmentId: visit['appointment_id']?.toString() ?? visit['id']?.toString(),
+                                    requestId: visit['request_id']?.toString(),
+                                    reference: visit['request_reference']?.toString() ?? 'VISIT',
+                                    counterpartName: patientName,
+                                    isCaregiver: true,
+                                  );
+                                },
                               ),
-                              icon: Icon(
-                                status == 'COMPLETED' ? Icons.check_circle_outline : Icons.arrow_forward_rounded,
-                                size: 18,
-                              ),
-                              label: Text(status == 'COMPLETED' ? 'Review Clinical Record' : 'Open Visit Console'),
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => VisitExecutionScreen(visit: visit),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: status == 'COMPLETED' ? AppColors.surface : AppColors.primary,
+                                    foregroundColor: status == 'COMPLETED' ? AppColors.textPrimary : Colors.white,
+                                    side: status == 'COMPLETED' ? const BorderSide(color: AppColors.border) : null,
+                                    minimumSize: const Size(double.infinity, 38),
                                   ),
-                                );
-                                _fetchData();
-                              },
-                            ),
+                                  icon: Icon(
+                                    status == 'COMPLETED' ? Icons.check_circle_outline : Icons.arrow_forward_rounded,
+                                    size: 18,
+                                  ),
+                                  label: Text(status == 'COMPLETED' ? 'Record' : 'Console', style: const TextStyle(fontSize: 12)),
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => VisitExecutionScreen(visit: visit),
+                                      ),
+                                    );
+                                    _fetchData();
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

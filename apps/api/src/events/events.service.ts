@@ -19,6 +19,10 @@ export type RealtimeEventType =
   | 'REVIEW_SUBMITTED'
   | 'QUOTE_UPDATED'
   | 'CAREGIVER_APPROVAL_UPDATED'
+  | 'CHAT_MESSAGE'
+  | 'EMERGENCY_SOS'
+  | 'BROADCAST_ANNOUNCEMENT'
+  | 'ETA_UPDATE'
   | 'HEARTBEAT'
 
 export interface AppRealtimeEvent {

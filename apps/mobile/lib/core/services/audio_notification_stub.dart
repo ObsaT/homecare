@@ -2,6 +2,10 @@ void playChime() {
   // No-op on native/vm
 }
 
+void playSiren() {
+  // No-op on native/vm
+}
+
 void requestNotificationPermission() {
   // No-op on native/vm
 }

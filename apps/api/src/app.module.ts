@@ -13,6 +13,7 @@ import { ReviewsModule } from './reviews/reviews.module'
 import { AdminModule } from './admin/admin.module'
 import { PaymentsModule } from './payments/payments.module'
 import { EventsModule } from './events/events.module'
+import { CommunicationsModule } from './comms/comms.module'
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { EventsModule } from './events/events.module'
     AdminModule,
     PaymentsModule,
     EventsModule,
+    CommunicationsModule,
   ],
   providers: [
     // Global, so no controller can accidentally leak a raw error by forgetting a try/catch.

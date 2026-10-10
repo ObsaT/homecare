@@ -96,6 +96,29 @@
       }
     };
 
+    window.playHomecareSiren = function() {
+      try {
+        var ctx = _getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(900, now);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.25);
+        osc.frequency.linearRampToValueAtTime(900, now + 0.5);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.75);
+        gain.gain.setValueAtTime(0.55, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 1.0);
+      } catch (e) {
+        console.warn('Unable to play siren:', e);
+      }
+    };
+
     window.requestHomecareNotificationPermission = function() {
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();

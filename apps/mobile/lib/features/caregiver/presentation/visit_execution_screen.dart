@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/route_map_card.dart';
+import '../../../core/widgets/visit_chat_bottom_sheet.dart';
 
 class VisitExecutionScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> visit;
@@ -348,6 +349,22 @@ class _VisitExecutionScreenState extends ConsumerState<VisitExecutionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Visit Console'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.forum_outlined),
+            tooltip: 'In-Visit Comms & SOS',
+            onPressed: () {
+              VisitChatBottomSheet.show(
+                context,
+                appointmentId: _appointmentId,
+                requestId: visit['request_id']?.toString(),
+                reference: visit['request_reference']?.toString() ?? 'VISIT',
+                counterpartName: patientName,
+                isCaregiver: true,
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -546,6 +563,24 @@ class _VisitExecutionScreenState extends ConsumerState<VisitExecutionScreen> {
           ],
         ),
       ),
+      floatingActionButton: _visitStatus != 'COMPLETED'
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.secondary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.forum_rounded, size: 20),
+              label: const Text('Comms & SOS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              onPressed: () {
+                VisitChatBottomSheet.show(
+                  context,
+                  appointmentId: _appointmentId,
+                  requestId: visit['request_id']?.toString(),
+                  reference: visit['request_reference']?.toString() ?? 'VISIT',
+                  counterpartName: patientName,
+                  isCaregiver: true,
+                );
+              },
+            )
+          : null,
     );
   }
 }

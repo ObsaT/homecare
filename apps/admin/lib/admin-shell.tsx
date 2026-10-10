@@ -28,6 +28,7 @@ const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Request Queue', href: '/requests', icon: ClipboardList },
   { name: 'Caregivers & Nurses', href: '/caregivers', icon: Users },
+  { name: 'Live Comms & Dispatch', href: '/comms', icon: Radio },
   { name: 'Services & Pricing', href: '/services', icon: Stethoscope },
   { name: 'Finance & Payments', href: '/billing', icon: Receipt },
   { name: 'Reviews & Quality', href: '/reviews', icon: Star },
@@ -253,6 +254,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+
+        {notifications.some((n) => n.type === 'EMERGENCY_SOS' && !n.read) && (
+          <div className="bg-rose-600 text-white px-4 py-2.5 flex items-center justify-between text-xs font-bold shadow-lg z-30 animate-pulse border-b-2 border-rose-800">
+            <div className="flex items-center gap-2">
+              <span className="p-1 bg-white/20 rounded-full text-base">🚨</span>
+              <span>CRITICAL EMERGENCY SOS: Immediate clinical attention or dispatch support requested!</span>
+            </div>
+            <Link
+              href="/comms"
+              className="bg-white text-rose-700 px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wide hover:bg-rose-50 shadow-xs"
+            >
+              Open Dispatch Console →
+            </Link>
+          </div>
+        )}
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           {children}
