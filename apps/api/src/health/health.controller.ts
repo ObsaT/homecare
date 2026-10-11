@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common'
 
 @Controller()
 export class HealthController {
-  @Get('health')
+  @Get(['health', 'api/v1/health'])
   check(): { status: 'ok'; service: string; time: string } {
     return { status: 'ok', service: 'homecare-api', time: new Date().toISOString() }
   }

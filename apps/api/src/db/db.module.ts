@@ -5,11 +5,22 @@ import { getConfig } from '../config'
 export const PG_POOL = 'PG_POOL'
 
 export function createPool(connectionString: string): Pool {
+  const isLocal =
+    connectionString.includes('127.0.0.1') ||
+    connectionString.includes('localhost') ||
+    connectionString.includes('@postgres:')
+  const useSsl =
+    !isLocal &&
+    (process.env.PGSSLMODE === 'require' ||
+      connectionString.includes('sslmode=') ||
+      process.env.NODE_ENV === 'production')
+
   const pool = new Pool({
     connectionString,
-    max: 5,
+    max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   })
   // Fail fast on configuration mistakes instead of surfacing them as request-time timeouts.
   pool.on('error', (error) => {

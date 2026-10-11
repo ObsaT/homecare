@@ -115,8 +115,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       wsRef.current.close();
     }
 
-    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-    const wsUrl = `ws://${host}:3000/ws?token=${encodeURIComponent(token)}`;
+    let wsBase = process.env.NEXT_PUBLIC_WS_URL;
+    if (!wsBase) {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL;
+      if (apiBase && apiBase.startsWith('http')) {
+        const parsed = new URL(apiBase);
+        const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsBase = `${wsProto}//${parsed.host}/ws`;
+      } else {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        wsBase = `${isHttps ? 'wss' : 'ws'}://${host}:3000/ws`;
+      }
+    }
+    const wsUrl = `${wsBase}?token=${encodeURIComponent(token)}`;
 
     try {
       const ws = new WebSocket(wsUrl);

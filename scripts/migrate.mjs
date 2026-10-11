@@ -28,7 +28,20 @@ if (!databaseUrl) {
   process.exit(2)
 }
 
-const client = new Client({ connectionString: databaseUrl })
+const isLocal =
+  databaseUrl.includes('127.0.0.1') ||
+  databaseUrl.includes('localhost') ||
+  databaseUrl.includes('@postgres:')
+const useSsl =
+  !isLocal &&
+  (process.env.PGSSLMODE === 'require' ||
+    databaseUrl.includes('sslmode=') ||
+    process.env.NODE_ENV === 'production')
+
+const client = new Client({
+  connectionString: databaseUrl,
+  ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+})
 await client.connect()
 
 await client.query(`

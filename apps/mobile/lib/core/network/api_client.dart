@@ -7,9 +7,14 @@ final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class ApiClient {
   static String get defaultBaseUrl {
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
     if (kIsWeb) {
       final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-      return 'http://$host:3000/api/v1';
+      final scheme = Uri.base.scheme == 'https' ? 'https' : 'http';
+      return '$scheme://$host:3000/api/v1';
     }
     return 'http://10.0.2.2:3000/api/v1';
   }

@@ -85,7 +85,7 @@ let devKeyPair: { private: string; public: string } | undefined
 
 function loadKey(kind: 'private' | 'public'): string {
   const inline = process.env[`JWT_${kind.toUpperCase()}_KEY`]
-  if (inline) return inline
+  if (inline) return inline.replace(/\\n/g, '\n')
 
   const candidates = [
     join(repoRoot(), '.secrets', `jwt-${kind}.pem`),
@@ -97,13 +97,16 @@ function loadKey(kind: 'private' | 'public'): string {
     if (existsSync(file)) return readFileSync(file, 'utf8')
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    if (!devKeyPair) devKeyPair = randomKeyPair()
-    return devKeyPair[kind]
+  if (!devKeyPair) {
+    if (process.env.NODE_ENV === 'production') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[Config] JWT_PRIVATE_KEY / JWT_PUBLIC_KEY not set in environment; generating runtime RS256 keypair.',
+      )
+    }
+    devKeyPair = randomKeyPair()
   }
-  throw new Error(
-    `No JWT_${kind.toUpperCase()}_KEY and no jwt-${kind}.pem found in .secrets. Run scripts/generate-keys.sh, or set the key inline.`,
-  )
+  return devKeyPair[kind]
 }
 
 export function getConfig(): AppConfig {
