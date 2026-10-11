@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class ApiClient {
+  static const String productionApiUrl = 'https://homecare-api-67cm.onrender.com/api/v1';
+
   static String get defaultBaseUrl {
     const envUrl = String.fromEnvironment('API_URL');
     if (envUrl.isNotEmpty) {
@@ -13,10 +15,12 @@ class ApiClient {
     }
     if (kIsWeb) {
       final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-      final scheme = Uri.base.scheme == 'https' ? 'https' : 'http';
-      return '$scheme://$host:3000/api/v1';
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return 'http://$host:3000/api/v1';
+      }
+      return productionApiUrl;
     }
-    return 'http://10.0.2.2:3000/api/v1';
+    return productionApiUrl;
   }
 
   final Dio dio;

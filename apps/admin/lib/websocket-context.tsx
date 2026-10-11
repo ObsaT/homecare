@@ -118,13 +118,23 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     let wsBase = process.env.NEXT_PUBLIC_WS_URL;
     if (!wsBase) {
       const savedApi = typeof window !== 'undefined' ? localStorage.getItem('hc_api_base_url') : null;
-      const apiBase = savedApi || process.env.NEXT_PUBLIC_API_URL;
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      const defaultApi =
+        host === 'localhost' || host === '127.0.0.1'
+          ? `http://${host}:3000/api/v1`
+          : 'https://homecare-api-67cm.onrender.com/api/v1';
+      const apiBase =
+        savedApi && !savedApi.includes('homecare-api.onrender.com')
+          ? savedApi
+          : process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('homecare-api.onrender.com')
+            ? process.env.NEXT_PUBLIC_API_URL
+            : defaultApi;
+
       if (apiBase && apiBase.startsWith('http')) {
         const parsed = new URL(apiBase);
         const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
         wsBase = `${wsProto}//${parsed.host}/ws`;
       } else {
-        const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
         wsBase = `${isHttps ? 'wss' : 'ws'}://${host}:3000/ws`;
       }

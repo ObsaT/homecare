@@ -45,13 +45,9 @@ jobs:
       - name: Build Flutter Web (Release, Offline CanvasKit)
         working-directory: apps/mobile
         env:
-          PROD_API_URL: ${{ inputs.api_url || vars.NEXT_PUBLIC_API_URL || '' }}
+          PROD_API_URL: ${{ inputs.api_url || vars.NEXT_PUBLIC_API_URL || 'https://homecare-api-67cm.onrender.com/api/v1' }}
         run: |
-          if [ -n "$PROD_API_URL" ]; then
-            flutter build web --release --no-web-resources-cdn --base-href "/homecare/" --dart-define=API_URL="$PROD_API_URL"
-          else
-            flutter build web --release --no-web-resources-cdn --base-href "/homecare/"
-          fi
+          flutter build web --release --no-web-resources-cdn --base-href "/homecare/" --dart-define=API_URL="$PROD_API_URL"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

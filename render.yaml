@@ -44,4 +44,4 @@ services:
           name: homecare-api
           property: host
       - key: NEXT_PUBLIC_API_URL
-        sync: false
+        value: https://homecare-api-67cm.onrender.com/api/v1

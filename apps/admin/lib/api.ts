@@ -1,15 +1,22 @@
+export const PRODUCTION_API_URL = 'https://homecare-api-67cm.onrender.com/api/v1';
+
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('hc_api_base_url');
-    if (saved && saved.startsWith('http')) {
+    if (saved && saved.startsWith('http') && !saved.includes('homecare-api.onrender.com')) {
       return saved.replace(/\/$/, '');
     }
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `http://${host}:3000/api/v1`;
+    }
+    return PRODUCTION_API_URL;
   }
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.startsWith('http')) {
+  if (envUrl && envUrl.startsWith('http') && !envUrl.includes('homecare-api.onrender.com')) {
     return envUrl.replace(/\/$/, '');
   }
-  return 'http://127.0.0.1:3000/api/v1';
+  return PRODUCTION_API_URL;
 }
 
 export const API_BASE_URL = getApiBaseUrl();
