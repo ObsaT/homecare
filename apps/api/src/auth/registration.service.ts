@@ -140,6 +140,16 @@ export class RegistrationService {
     }
   }
 
+  private assertAlphanumericPassword(password: string): void {
+    const pwd = (password || '').trim()
+    if (pwd.length < 6 || !/[A-Za-z]/.test(pwd) || !/[0-9]/.test(pwd)) {
+      throw new AuthError(
+        ErrorCode.VALIDATION_ERROR,
+        'Password must be alphanumeric (at least 6 characters containing both letters and numbers).',
+      )
+    }
+  }
+
   async issueRegisterToken(
     phoneE164: string,
     purpose: string,
@@ -154,6 +164,8 @@ export class RegistrationService {
     input: FlexibleRegisterCustomerInput,
     context: SessionContext,
   ): Promise<Session & { is_new_user: true }> {
+    this.assertAlphanumericPassword(input.password)
+
     let phoneE164: string
 
     if (input.register_token) {
@@ -318,6 +330,8 @@ export class RegistrationService {
         'full_name, phone_e164, password, and professional_title are required',
       )
     }
+
+    this.assertAlphanumericPassword(input.password)
 
     const phone = normalizeEthiopianPhoneE164(input.phone_e164)
     const availability = await this.checkPhoneAvailability({

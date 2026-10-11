@@ -17,6 +17,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _woredaController = TextEditingController();
   final _houseController = TextEditingController();
   final _landmarkController = TextEditingController();
@@ -27,6 +28,20 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
   String _selectedSubCity = 'Bole';
   bool _agreedToTerms = true;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  static String? _validateAlphanumericPassword(String? value) {
+    final v = value ?? '';
+    if (v.length < 6) {
+      return 'Password must be at least 6 characters and alphanumeric (letters & numbers)';
+    }
+    final hasLetter = RegExp(r'[A-Za-z]').hasMatch(v);
+    final hasNumber = RegExp(r'[0-9]').hasMatch(v);
+    if (!hasLetter || !hasNumber) {
+      return 'Password must be alphanumeric (contain both letters and numbers)';
+    }
+    return null;
+  }
 
   final List<String> _subCities = [
     'Bole',
@@ -47,6 +62,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
     _nameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _woredaController.dispose();
     _houseController.dispose();
     _landmarkController.dispose();
@@ -206,16 +222,48 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    labelText: 'Password *',
-                    hintText: '••••••••',
+                    labelText: 'Password (Alphanumeric) *',
+                    hintText: 'Letters & numbers (e.g. Care2026)',
+                    helperText: 'Must contain at least 6 characters with both letters and numbers',
+                    helperMaxLines: 2,
+                    errorMaxLines: 2,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  validator: (v) => v == null || v.length < 6 ? 'Password must be at least 6 characters' : null,
+                  validator: _validateAlphanumericPassword,
+                ),
+                const SizedBox(height: 14),
+
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password *',
+                    hintText: 'Re-enter your password',
+                    errorMaxLines: 2,
+                    prefixIcon: const Icon(Icons.lock_reset_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return 'Please confirm your password';
+                    }
+                    if (v != _passwordController.text) {
+                      return 'Passwords do not match';
+                    }
+                    return _validateAlphanumericPassword(v);
+                  },
                 ),
                 const SizedBox(height: 22),
 
