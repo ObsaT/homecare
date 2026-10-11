@@ -1,4 +1,18 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api/v1';
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('hc_api_base_url');
+    if (saved && saved.startsWith('http')) {
+      return saved.replace(/\/$/, '');
+    }
+  }
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && envUrl.startsWith('http')) {
+    return envUrl.replace(/\/$/, '');
+  }
+  return 'http://127.0.0.1:3000/api/v1';
+}
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export interface ApiError {
   code: string;
@@ -26,7 +40,8 @@ export async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<{ data: T | null; error: ApiError | null }> {
   const token = getStoredToken();
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

@@ -38,5 +38,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: API_HOST
+        fromService:
+          type: web
+          name: homecare-api
+          property: host
       - key: NEXT_PUBLIC_API_URL
         sync: false

@@ -20,12 +20,30 @@ export const JSON_BODY_LIMIT = '12mb'
  * `configureApp` must be called by every entry point that serves traffic, including tests.
  */
 export function configureApp(app: INestApplication): INestApplication {
-  // Enable CORS for web admin dashboard and mobile client development
+  // Enable CORS for web admin dashboard and mobile client across all local and cloud origins
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const origin = req.headers.origin || '*'
+    res.header('Access-Control-Allow-Origin', origin)
+    res.header('Vary', 'Origin')
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS')
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Accept, Authorization, X-Request-Id, Idempotency-Key',
+    )
+    res.header('Access-Control-Allow-Credentials', 'true')
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
+    }
+    next()
+  })
+
   app.enableCors({
     origin: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
     credentials: true,
+    optionsSuccessStatus: 204,
   })
 
   // Middleware, not an interceptor: interceptors skip unmatched routes, so a 404 would carry no

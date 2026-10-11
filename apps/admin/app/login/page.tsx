@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
-import { ShieldCheck, Lock, Phone, KeyRound, ArrowRight, UserCheck, AlertCircle } from 'lucide-react';
+import { getApiBaseUrl } from '../../lib/api';
+import { ShieldCheck, Lock, Phone, KeyRound, ArrowRight, UserCheck, AlertCircle, Server } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -16,6 +17,28 @@ export default function AdminLoginPage() {
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [apiUrl, setApiUrl] = useState('');
+  const [showApiConfig, setShowApiConfig] = useState(false);
+
+  useEffect(() => {
+    setApiUrl(getApiBaseUrl());
+  }, []);
+
+  const handleSaveApiUrl = (newUrl: string) => {
+    let formatted = newUrl.trim().replace(/\/$/, '');
+    if (formatted && !formatted.endsWith('/api/v1')) {
+      formatted = `${formatted}/api/v1`;
+    }
+    setApiUrl(formatted);
+    if (typeof window !== 'undefined') {
+      if (formatted) {
+        localStorage.setItem('hc_api_base_url', formatted);
+      } else {
+        localStorage.removeItem('hc_api_base_url');
+      }
+    }
+    setError(null);
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,6 +340,48 @@ export default function AdminLoginPage() {
                 <UserCheck className="h-4 w-4 text-amber-400" />
               </button>
             </div>
+          </div>
+
+          {/* Backend API Endpoint Switcher (for Render/Cloud deployments) */}
+          <div className="border-t border-slate-800/80 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowApiConfig(!showApiConfig)}
+              className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-emerald-400 transition"
+            >
+              <Server className="h-3.5 w-3.5" />
+              <span>API Server: <code className="text-slate-300">{apiUrl}</code> (Change)</span>
+            </button>
+
+            {showApiConfig && (
+              <div className="mt-2.5 rounded-lg border border-slate-700 bg-slate-800/70 p-3 space-y-2">
+                <label className="block text-[11px] font-medium text-slate-300">
+                  Render / Cloud Backend API URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
+                    placeholder="https://homecare-api-xxxx.onrender.com/api/v1"
+                    className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSaveApiUrl(apiUrl);
+                      setShowApiConfig(false);
+                    }}
+                    className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Paste your exact Render <code>homecare-api</code> service URL (e.g. <code>https://homecare-api-xxxx.onrender.com</code>).
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -117,7 +117,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     let wsBase = process.env.NEXT_PUBLIC_WS_URL;
     if (!wsBase) {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL;
+      const savedApi = typeof window !== 'undefined' ? localStorage.getItem('hc_api_base_url') : null;
+      const apiBase = savedApi || process.env.NEXT_PUBLIC_API_URL;
       if (apiBase && apiBase.startsWith('http')) {
         const parsed = new URL(apiBase);
         const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
