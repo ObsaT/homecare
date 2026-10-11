@@ -241,7 +241,9 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                     DropdownMenuItem(value: 'PHYSIOTHERAPY', child: Text('Physiotherapy (የፊዚዮቴራፒ)')),
                     DropdownMenuItem(value: 'OTHER', child: Text('Other Specialized Request')),
                   ],
-                  onChanged: (val) => setState(() => _selectedService = val!),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedService = val);
+                  },
                 ),
               ],
             ),
@@ -280,7 +282,9 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                           DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
                           DropdownMenuItem(value: 'OTHER', child: Text('Other')),
                         ],
-                        onChanged: (v) => setState(() => _patientGender = v!),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _patientGender = v);
+                        },
                       ),
                     ),
                   ],
@@ -296,7 +300,9 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                     DropdownMenuItem(value: 'WHEELCHAIR', child: Text('Wheelchair Bound')),
                     DropdownMenuItem(value: 'BEDBOUND', child: Text('Bedbound')),
                   ],
-                  onChanged: (v) => setState(() => _mobility = v!),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _mobility = v);
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -352,7 +358,9 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                     DropdownMenuItem(value: 240, child: Text('4 hours (Half Day)')),
                     DropdownMenuItem(value: 480, child: Text('8 hours (Full Day)')),
                   ],
-                  onChanged: (v) => setState(() => _durationMinutes = v!),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _durationMinutes = v);
+                  },
                 ),
               ],
             ),
@@ -371,7 +379,9 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                   value: _selectedSubCity,
                   decoration: const InputDecoration(labelText: 'Sub-City (ክፍለ ከተማ)'),
                   items: subCities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (v) => setState(() => _selectedSubCity = v!),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedSubCity = v);
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(

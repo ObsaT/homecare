@@ -154,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     border: Border.all(color: AppColors.error.withOpacity(0.3)),
                   ),
                   child: Text(
-                    authState.errorMessage!,
+                    authState.errorMessage ?? '',
                     style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
@@ -209,15 +209,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   onPressed: authState.isLoading
                       ? null
                       : () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          await Future.delayed(const Duration(milliseconds: 60));
                           final phoneDigits = _phoneController.text.trim().replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '');
                           final phoneNormalized = '+251$phoneDigits';
                           final pwd = _passwordController.text.trim();
 
                           final ok = await ref.read(authProvider.notifier).loginWithPassword(phoneNormalized, pwd);
-                          if (!ok) {
+                          if (!ok && mounted) {
                             // If credentials didn't match, give option to request OTP
                             final otpSuccess = await ref.read(authProvider.notifier).requestOtp(phoneNormalized);
-                            if (otpSuccess) setState(() => _otpSent = true);
+                            if (otpSuccess && mounted) setState(() => _otpSent = true);
                           }
                         },
                   child: authState.isLoading
@@ -240,7 +242,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       'Register Caregiver',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      await Future.delayed(const Duration(milliseconds: 60));
+                      if (!context.mounted) return;
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const RegisterCaregiverScreen()),
                       );
@@ -257,7 +262,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       'New Patient? Register Customer Account',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      await Future.delayed(const Duration(milliseconds: 60));
+                      if (!context.mounted) return;
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const RegisterCustomerScreen()),
                       );

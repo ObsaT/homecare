@@ -33,6 +33,9 @@ export class CaregiverService {
       select
         u.id, u.full_name, u.phone_e164, u.is_available,
         cp.approval_status, cp.professional_title, cp.qualification_level,
+        cp.licence_number, cp.years_experience,
+        coalesce(cp.registration_fee_paid, false) as registration_fee_paid,
+        pay.provider_reference as registration_payment_reference,
         cp.rating_avg, cp.rating_count, cp.completed_visits,
         cp.home_sub_city_id,
         hsc.name_en as home_sub_city,
@@ -49,6 +52,7 @@ export class CaregiverService {
         ) as coverage_sub_cities
       from auth.users u
       left join ops.caregiver_profiles cp on cp.user_id = u.id
+      left join fin.payments pay on pay.id = cp.registration_payment_id
       left join catalog.sub_cities hsc on hsc.id = cp.home_sub_city_id
       left join ops.caregiver_settings cs on cs.caregiver_id = u.id
       where u.id = $1

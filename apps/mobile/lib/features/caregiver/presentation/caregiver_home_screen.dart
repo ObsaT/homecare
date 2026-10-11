@@ -417,18 +417,23 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final ratingAvg = _profile?['rating_avg'] != null ? '${_profile!['rating_avg']} ★' : '4.9 ★';
-    final completedCount = _profile?['completed_visits'] != null ? '${_profile!['completed_visits']}' : '0';
-    final homeSubCity = _profile?['home_sub_city'] ?? 'Bole Sub-City';
+    final rawRating = _profile?['rating_avg'];
+    final ratingAvg = rawRating != null ? '$rawRating ★' : '5.0 ★';
+    final rawCompleted = _profile?['completed_visits'];
+    final completedCount = rawCompleted != null ? '$rawCompleted' : '0';
+    final homeSubCity = _profile?['home_sub_city']?.toString() ?? 'Bole Sub-City';
     final radiusKm = _profile?['notification_radius_km'] ?? 10;
     final coverageList = _profile?['coverage_sub_cities'] as List? ?? [];
+    final approvalStatus = _profile?['approval_status']?.toString() ?? 'PENDING_REVIEW';
+    final feePaid = _profile?['registration_fee_paid'] == true;
+    final paymentRef = _profile?['registration_payment_reference']?.toString();
 
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(user?.fullName ?? _profile?['full_name'] ?? 'Caregiver Portal', style: const TextStyle(fontSize: 16)),
+            Text(user?.fullName ?? _profile?['full_name']?.toString() ?? 'Caregiver Portal', style: const TextStyle(fontSize: 16)),
             Text(
               '${_profile?['professional_title'] ?? 'Registered Nurse'} • Addis Ababa',
               style: const TextStyle(fontSize: 12, color: AppColors.primary),
@@ -528,6 +533,63 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                           Text(
                             'Test Tone',
                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Telebirr Onboarding & Clinical License Verification Status Card
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: approvalStatus == 'APPROVED'
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: approvalStatus == 'APPROVED'
+                        ? const Color(0xFF10B981).withOpacity(0.35)
+                        : const Color(0xFF0072BC).withOpacity(0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      approvalStatus == 'APPROVED'
+                          ? Icons.verified_rounded
+                          : Icons.pending_actions_rounded,
+                      color: approvalStatus == 'APPROVED'
+                          ? const Color(0xFF059669)
+                          : const Color(0xFF0072BC),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            approvalStatus == 'APPROVED'
+                                ? 'Clinical License Verified & Active for Dispatch'
+                                : 'Clinical License: Pending Admin Approval',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: approvalStatus == 'APPROVED'
+                                  ? const Color(0xFF065F46)
+                                  : const Color(0xFF005A96),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            feePaid
+                                ? 'Telebirr Onboarding Fee: PAID${paymentRef != null ? " (Ref: $paymentRef)" : ""}'
+                                : 'Telebirr Onboarding Status: Recorded',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                           ),
                         ],
                       ),

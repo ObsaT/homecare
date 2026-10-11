@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/services/audio_notification_service.dart';
 import '../../../core/services/realtime_events_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/visit_chat_bottom_sheet.dart';
+import '../../auth/providers/auth_provider.dart';
 import 'review_visit_screen.dart';
 
 class RequestTrackingScreen extends ConsumerStatefulWidget {
@@ -34,6 +36,7 @@ class RequestTrackingScreen extends ConsumerStatefulWidget {
 class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
   late String _currentStatus;
   String? _caregiverName;
+  Map<String, dynamic>? _requestDetail;
   StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
 
   final List<Map<String, String>> _statusSteps = const [
@@ -51,6 +54,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
     super.initState();
     _currentStatus = widget.status;
     _caregiverName = widget.caregiverName;
+    _fetchDetail();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initRealtimeListener();
     });
@@ -60,6 +64,26 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
   void dispose() {
     _realtimeSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _fetchDetail() async {
+    if (widget.requestId == null || widget.requestId!.isEmpty) return;
+    try {
+      final api = ref.read(apiClientProvider);
+      final res = await api.dio.get('/requests/${widget.requestId}');
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      if (data is Map && mounted) {
+        setState(() {
+          _requestDetail = Map<String, dynamic>.from(data);
+          if (_requestDetail?['status'] != null) {
+            _currentStatus = _requestDetail?['status'].toString() ?? _currentStatus;
+          }
+          if (_requestDetail?['caregiver_name'] != null) {
+            _caregiverName = _requestDetail?['caregiver_name'].toString();
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _initRealtimeListener() {
@@ -82,6 +106,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
           if (type == 'VISIT_STATUS_CHANGED' || type == 'OFFER_ACCEPTED' || type == 'VISIT_COMPLETED') {
             final newStatus = data['status']?.toString();
             final cgName = data['caregiver_name']?.toString();
+            _fetchDetail();
             if (newStatus != null && mounted) {
               setState(() {
                 _currentStatus = newStatus;
@@ -98,6 +123,9 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                 ),
               );
             }
+          } else if (type == 'QUOTE_UPDATED' || type == 'PAYMENT_CONFIRMED') {
+            _fetchDetail();
+            AudioNotificationService.playChime();
           } else if (type == 'CHAT_MESSAGE') {
             AudioNotificationService.playChime();
             final sender = data['sender_name'] ?? 'Caregiver';
@@ -165,6 +193,209 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
     } catch (_) {}
   }
 
+  Future<void> _showTelebirrSandboxModal(double amountEtb, String? invoiceId, String? invoiceNumber) async {
+    final userPhone = ref.read(authProvider).user?.phone ?? '0911555555';
+    final phoneCtrl = TextEditingController(text: userPhone);
+    final pinCtrl = TextEditingController(text: '1234');
+    bool isSubmitting = false;
+    String? errorMsg;
+
+    final order = await ref.read(authProvider.notifier).createTelebirrSandboxOrder(
+          amountEtb: amountEtb,
+          phone: userPhone,
+          purpose: 'CUSTOMER_INVOICE',
+          invoiceId: invoiceId,
+          requestId: widget.requestId,
+          title: 'Home Care Invoice ${invoiceNumber ?? widget.reference}',
+        );
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0072BC), Color(0xFF005A96)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'telebirr',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF0072BC),
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            const Text(
+                              'SANDBOX (*127#)',
+                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'ETB ${amountEtb.toStringAsFixed(2)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Order: ${order['merch_order_id'] ?? ''} • Shortcode: 884210',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ActionChip(
+                        label: const Text('Approve (1234)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => setModalState(() {
+                          pinCtrl.text = '1234';
+                          errorMsg = null;
+                        }),
+                      ),
+                      ActionChip(
+                        label: const Text('Low Balance (0000)', style: TextStyle(fontSize: 11)),
+                        onPressed: () => setModalState(() => pinCtrl.text = '0000'),
+                      ),
+                      ActionChip(
+                        label: const Text('Cancel (9999)', style: TextStyle(fontSize: 11)),
+                        onPressed: () => setModalState(() => pinCtrl.text = '9999'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (errorMsg != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(errorMsg ?? '', style: TextStyle(color: Colors.red.shade800, fontSize: 12)),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  TextField(
+                    controller: phoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Telebirr Mobile Number',
+                      prefixIcon: Icon(Icons.phone_android_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: pinCtrl,
+                    obscureText: true,
+                    maxLength: 4,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Telebirr Sandbox PIN (1234 = Approve)',
+                      counterText: '',
+                      prefixIcon: Icon(Icons.lock_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0072BC),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+                    label: Text(
+                      isSubmitting ? 'Authorizing...' : 'Authorize ETB ${amountEtb.toStringAsFixed(0)} via Telebirr',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            setModalState(() {
+                              isSubmitting = true;
+                              errorMsg = null;
+                            });
+                            try {
+                              final res = await ref.read(authProvider.notifier).authorizeTelebirrSandboxOrder(
+                                    prepayId: order['prepay_id']?.toString(),
+                                    merchOrderId: order['merch_order_id']?.toString(),
+                                    telebirrPhone: phoneCtrl.text.trim(),
+                                    pin: pinCtrl.text.trim(),
+                                    amountEtb: amountEtb,
+                                    purpose: 'CUSTOMER_INVOICE',
+                                    invoiceId: invoiceId,
+                                    requestId: widget.requestId,
+                                  );
+                              if (ctx.mounted) Navigator.of(ctx).pop();
+                              await _fetchDetail();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: const Color(0xFF0072BC),
+                                    content: Text(
+                                      'Telebirr Receipt ${res['receipt_number'] ?? ''} verified! Invoice marked PAID.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              String msg = 'Telebirr Sandbox declined transaction.';
+                              try {
+                                final dynamic errObj = e;
+                                final resp = errObj.response?.data;
+                                if (resp is Map) {
+                                  msg = resp['message']?.toString() ?? resp['error']?['message']?.toString() ?? msg;
+                                }
+                              } catch (_) {}
+                              setModalState(() {
+                                isSubmitting = false;
+                                errorMsg = msg;
+                              });
+                            }
+                          },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   int get _stepIndex {
     switch (_currentStatus) {
       case 'SUBMITTED':
@@ -211,10 +442,29 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
     final statusColor = _getStatusColor();
     final caregiverName = _caregiverName ?? widget.caregiverName ?? 'Assigned Nurse / Caregiver';
 
+    final totalSantim = num.tryParse(
+          (_requestDetail?['total_santim'] ?? _requestDetail?['price_santim'] ?? 100000).toString(),
+        ) ??
+        100000;
+    final paidSantim = num.tryParse((_requestDetail?['paid_santim'] ?? 0).toString()) ?? 0;
+    final discountSantim = num.tryParse((_requestDetail?['discount_santim'] ?? 0).toString()) ?? 0;
+    final surchargeSantim = num.tryParse((_requestDetail?['surcharge_santim'] ?? 0).toString()) ?? 0;
+    final invoiceStatus = _requestDetail?['invoice_status']?.toString() ?? 'ISSUED';
+    final invoiceNumber = _requestDetail?['invoice_number']?.toString();
+    final invoiceId = _requestDetail?['invoice_id']?.toString();
+    final invoiceNotes = _requestDetail?['invoice_notes']?.toString();
+    final totalEtb = (totalSantim / 100).toDouble();
+    final remainingEtb = ((totalSantim - paidSantim) > 0 ? (totalSantim - paidSantim) / 100 : totalEtb).toDouble();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Visit Tracking'),
+        title: const Text('Visit Tracking & Payment'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh Status & Invoice',
+            onPressed: _fetchDetail,
+          ),
           // Prototype state cycler so stakeholders can test every phase
           PopupMenuButton<String>(
             icon: const Icon(Icons.tune_rounded),
@@ -284,6 +534,104 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+
+            // Service Quote / Invoice & Telebirr Sandbox Checkout Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF0072BC).withOpacity(0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.receipt_long_rounded, size: 18, color: Color(0xFF0072BC)),
+                          const SizedBox(width: 6),
+                          Text(
+                            invoiceNumber ?? 'Service Billing & Quote',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: invoiceStatus == 'PAID'
+                              ? AppColors.success.withOpacity(0.15)
+                              : const Color(0xFF0072BC).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          invoiceStatus,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: invoiceStatus == 'PAID' ? AppColors.success : const Color(0xFF0072BC),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Visit Fee:', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                      Text(
+                        'ETB ${totalEtb.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                  if (discountSantim > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Discount Applied: -ETB ${(discountSantim / 100).toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.success, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  if (surchargeSantim > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Clinical/Urgent Surcharge: +ETB ${(surchargeSantim / 100).toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.accentWarning, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  if (invoiceNotes != null && invoiceNotes.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Finance Note: $invoiceNotes',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                  if (invoiceStatus != 'PAID' && invoiceStatus != 'VOID') ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0072BC),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.payments_outlined, color: Colors.white, size: 18),
+                        label: Text(
+                          'Pay ETB ${remainingEtb.toStringAsFixed(0)} with telebirr Sandbox',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        onPressed: () => _showTelebirrSandboxModal(remainingEtb, invoiceId, invoiceNumber),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             const SizedBox(height: 20),
 
             // Caregiver Card (Shown when assigned or beyond)
@@ -300,7 +648,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                     CircleAvatar(
                       radius: 28,
                       backgroundColor: AppColors.primary,
-                      child: const Text('AH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: const Text('RN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -309,13 +657,13 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                         children: [
                           Text(caregiverName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(height: 2),
-                          const Text('Licensed Registered Nurse • 6 yrs exp', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          const Text('Licensed Clinical Nurse • Verified', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                           const SizedBox(height: 4),
                           const Row(
                             children: [
                               Icon(Icons.star_rounded, size: 14, color: AppColors.accentWarning),
                               SizedBox(width: 2),
-                              Text('4.9 (42 visits)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text('4.9 ★ Verified', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ],
@@ -345,7 +693,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                           tooltip: 'Call Caregiver',
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Dialing caregiver phone: +251 91 100 0001')),
+                              const SnackBar(content: Text('Dialing caregiver phone...')),
                             );
                           },
                         ),
@@ -416,7 +764,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                step['title']!,
+                                step['title'] ?? '',
                                 style: TextStyle(
                                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
                                   fontSize: 13,
@@ -425,7 +773,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                step['desc']!,
+                                step['desc'] ?? '',
                                 style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                               ),
                             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
@@ -56,7 +57,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState?.validate() != true) return;
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please accept terms and health data processing')),
@@ -64,18 +65,28 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
       return;
     }
 
-    final success = await ref.read(authProvider.notifier).registerCustomer(
-          fullName: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          password: _passwordController.text.trim(),
-          subCity: _selectedSubCity,
-          woreda: _woredaController.text.trim(),
-          houseNumber: _houseController.text.trim(),
-          landmark: _landmarkController.text.trim(),
-          emergencyName: _emergencyNameController.text.trim(),
-          emergencyPhone: _emergencyPhoneController.text.trim(),
-          emergencyRel: _emergencyRelController.text.trim(),
-        );
+    FocusManager.instance.primaryFocus?.unfocus();
+    try {
+      await SystemChannels.textInput.invokeMethod('TextInput.hide');
+      await SystemChannels.textInput.invokeMethod('TextInput.clearClient');
+    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 90));
+    if (!mounted) return;
+
+    final authNotifier = ref.read(authProvider.notifier);
+    final success = await authNotifier.registerCustomer(
+      fullName: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      password: _passwordController.text.trim(),
+      subCity: _selectedSubCity,
+      woreda: _woredaController.text.trim(),
+      houseNumber: _houseController.text.trim(),
+      landmark: _landmarkController.text.trim(),
+      emergencyName: _emergencyNameController.text.trim(),
+      emergencyPhone: _emergencyPhoneController.text.trim(),
+      emergencyRel: _emergencyRelController.text.trim(),
+      deferAuthTransition: true,
+    );
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +95,11 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
           content: Text('Account created successfully! Welcome to Home Care Addis.'),
         ),
       );
-      Navigator.of(context).pop();
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      await Future.delayed(const Duration(milliseconds: 60));
+      authNotifier.completeDeferredAuthTransition();
     } else if (mounted) {
       final err = ref.read(authProvider).errorMessage ?? 'Registration failed';
       ScaffoldMessenger.of(context).showSnackBar(

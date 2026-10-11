@@ -1,11 +1,31 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common'
-import { PaymentsService, type PaymentClaimInput } from './payments.service'
+import {
+  PaymentsService,
+  type AuthorizeTelebirrOrderInput,
+  type CreateTelebirrOrderInput,
+  type PaymentClaimInput,
+} from './payments.service'
 import { JwtAuthGuard, type AuthenticatedUser } from '../auth/jwt-auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 
 @Controller('api/v1')
 export class PaymentsController {
   constructor(@Inject(PaymentsService) private readonly payments: PaymentsService) {}
+
+  @Get('payments/telebirr/config')
+  getTelebirrSandboxConfig() {
+    return { data: this.payments.getTelebirrSandboxConfig() }
+  }
+
+  @Post('payments/telebirr/create-order')
+  async createTelebirrSandboxOrder(@Body() body: CreateTelebirrOrderInput) {
+    return { data: await this.payments.createTelebirrSandboxOrder(body) }
+  }
+
+  @Post('payments/telebirr/authorize')
+  async authorizeTelebirrSandboxOrder(@Body() body: AuthorizeTelebirrOrderInput) {
+    return { data: await this.payments.authorizeTelebirrSandboxOrder(body) }
+  }
 
   @Get('invoices')
   @UseGuards(JwtAuthGuard)

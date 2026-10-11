@@ -212,10 +212,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void switchRole(UserRole newRole) {
-    if (state.user != null) {
+    final currentUser = state.user;
+    if (currentUser != null) {
       final updated = AppUser(
-        id: state.user!.id,
-        phone: state.user!.phone,
+        id: currentUser.id,
+        phone: currentUser.phone,
         fullName: newRole == UserRole.caregiver ? 'Sister Almaz Hailu (RN)' : 'Abebe Bikila',
         role: newRole,
         isAvailable: true,
@@ -242,6 +243,64 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<Map<String, dynamic>> createTelebirrSandboxOrder({
+    required double amountEtb,
+    required String phone,
+    String purpose = 'CAREGIVER_REGISTRATION',
+    String? invoiceId,
+    String? requestId,
+    String? title,
+  }) async {
+    try {
+      final res = await _api.dio.post('/payments/telebirr/create-order', data: {
+        'amount_etb': amountEtb,
+        'phone_e164': phone,
+        'purpose': purpose,
+        if (invoiceId != null) 'invoice_id': invoiceId,
+        if (requestId != null) 'request_id': requestId,
+        if (title != null) 'title': title,
+      });
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      return Map<String, dynamic>.from(data as Map);
+    } catch (_) {
+      final ts = DateTime.now().millisecondsSinceEpoch.toString().substring(5);
+      return {
+        'prepay_id': 'PREPAY-TB-$ts',
+        'merch_order_id': 'HC-ORD-$ts',
+        'short_code': '884210',
+        'merchant_name': 'Addis Home Care Health Network',
+        'amount_etb': amountEtb,
+        'amount_santim': (amountEtb * 100).round(),
+        'sandbox_mode': true,
+        'ussd_prompt': 'USSD Push (*127#) to $phone: Confirm payment of ETB ${amountEtb.toStringAsFixed(2)} to Addis Home Care (884210).',
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> authorizeTelebirrSandboxOrder({
+    String? prepayId,
+    String? merchOrderId,
+    required String telebirrPhone,
+    required String pin,
+    required double amountEtb,
+    String purpose = 'CAREGIVER_REGISTRATION',
+    String? invoiceId,
+    String? requestId,
+  }) async {
+    final res = await _api.dio.post('/payments/telebirr/authorize', data: {
+      if (prepayId != null) 'prepay_id': prepayId,
+      if (merchOrderId != null) 'merch_order_id': merchOrderId,
+      'telebirr_phone': telebirrPhone,
+      'pin': pin,
+      'amount_etb': amountEtb,
+      'purpose': purpose,
+      if (invoiceId != null) 'invoice_id': invoiceId,
+      if (requestId != null) 'request_id': requestId,
+    });
+    final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<bool> registerCustomer({
     required String fullName,
     required String phone,
@@ -253,6 +312,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? emergencyName,
     String? emergencyPhone,
     String? emergencyRel,
+    bool deferAuthTransition = false,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
@@ -282,9 +342,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final rawUser = data['user'] ?? data['data']?['user'] ?? {};
       final user = AppUser(
-        id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
-        phone: rawUser['phone_e164'] ?? phoneNormalized,
-        fullName: rawUser['full_name'] ?? fullName,
+        id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164']?.toString() ?? phoneNormalized,
+        fullName: rawUser['full_name']?.toString() ?? fullName,
         role: UserRole.customer,
         isAvailable: true,
       );
@@ -300,7 +360,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(
         isLoading: false,
-        isAuthenticated: true,
+        isAuthenticated: !deferAuthTransition,
         token: token.toString(),
         user: user,
       );
@@ -311,6 +371,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         errorMessage: 'Registration failed. Phone may already be registered or network issue.',
       );
       return false;
+    }
+  }
+
+  void completeDeferredAuthTransition() {
+    if (state.user != null && state.token != null && !state.isAuthenticated) {
+      state = state.copyWith(isAuthenticated: true, isLoading: false);
     }
   }
 
@@ -325,6 +391,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String subCity,
     required String telebirrPhone,
     required String telebirrReference,
+    bool deferAuthTransition = false,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
@@ -356,9 +423,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final rawUser = data['user'] ?? data['data']?['user'] ?? {};
       final user = AppUser(
-        id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
-        phone: rawUser['phone_e164'] ?? phoneNormalized,
-        fullName: rawUser['full_name'] ?? fullName,
+        id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164']?.toString() ?? phoneNormalized,
+        fullName: rawUser['full_name']?.toString() ?? fullName,
         role: UserRole.caregiver,
         isAvailable: true,
       );
@@ -374,7 +441,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(
         isLoading: false,
-        isAuthenticated: true,
+        isAuthenticated: !deferAuthTransition,
         token: token.toString(),
         user: user,
       );
@@ -388,7 +455,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 }
-
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final api = ref.watch(apiClientProvider);

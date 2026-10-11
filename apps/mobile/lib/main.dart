@@ -32,11 +32,12 @@ class HomeCareApp extends ConsumerWidget {
   }
 
   Widget _buildHome(AuthState authState) {
-    if (!authState.isAuthenticated || authState.user == null) {
+    final user = authState.user;
+    if (!authState.isAuthenticated || user == null) {
       return const LoginScreen();
     }
 
-    switch (authState.user!.role) {
+    switch (user.role) {
       case UserRole.caregiver:
         return const CaregiverHomeScreen();
       case UserRole.customer:

@@ -309,12 +309,21 @@ export class RequestsService {
         p.full_name as patient_name,
         a.id as appointment_id, a.status as appointment_status,
         a.scheduled_start, a.scheduled_end, a.price_santim,
-        cg.full_name as caregiver_name
+        cg.full_name as caregiver_name,
+        i.id as invoice_id, i.invoice_number, i.status as invoice_status,
+        i.total_santim, i.paid_santim, i.discount_santim, i.surcharge_santim, i.notes as invoice_notes
       from ops.requests r
       join catalog.services s on s.id = r.primary_service_id
       join clinical.patients p on p.id = r.patient_id
       left join ops.appointments a on a.request_id = r.id and a.occurrence_index = 1
       left join auth.users cg on cg.id = a.caregiver_id
+      left join lateral (
+        select id, invoice_number, status, total_santim, paid_santim, discount_santim, surcharge_santim, notes
+        from fin.invoices
+        where request_id = r.id
+        order by created_at desc
+        limit 1
+      ) i on true
       where r.customer_user_id = $1
       order by r.created_at desc
     `
@@ -333,12 +342,21 @@ export class RequestsService {
         a.id as appointment_id, a.status as appointment_status,
         a.scheduled_start, a.scheduled_end, a.price_santim,
         a.arrival_at, a.departure_at,
-        cg.id as caregiver_id, cg.full_name as caregiver_name, cg.phone as caregiver_phone
+        cg.id as caregiver_id, cg.full_name as caregiver_name, cg.phone as caregiver_phone,
+        i.id as invoice_id, i.invoice_number, i.status as invoice_status,
+        i.total_santim, i.paid_santim, i.discount_santim, i.surcharge_santim, i.notes as invoice_notes
       from ops.requests r
       join catalog.services s on s.id = r.primary_service_id
       join clinical.patients p on p.id = r.patient_id
       left join ops.appointments a on a.request_id = r.id and a.occurrence_index = 1
       left join auth.users cg on cg.id = a.caregiver_id
+      left join lateral (
+        select id, invoice_number, status, total_santim, paid_santim, discount_santim, surcharge_santim, notes
+        from fin.invoices
+        where request_id = r.id
+        order by created_at desc
+        limit 1
+      ) i on true
       where r.id = $1 and r.customer_user_id = $2
     `
     const { rows } = await this.pool.query(query, [requestId, customerUserId])
