@@ -33,6 +33,23 @@ function toUserRow(row: UserRow): UserRow {
   return row
 }
 
+export function normalizeEthiopianPhoneE164(raw: string): string {
+  const digitsOnly = (raw || '').replace(/\D/g, '')
+  if (!digitsOnly) return ''
+  // Strip leading 251 country code if present, then strip leading 0
+  let subscriber = digitsOnly
+  if (subscriber.startsWith('251') && subscriber.length >= 12) {
+    subscriber = subscriber.slice(3)
+  }
+  while (subscriber.startsWith('0') && subscriber.length > 9) {
+    subscriber = subscriber.slice(1)
+  }
+  if (subscriber.startsWith('0') && subscriber.length === 10) {
+    subscriber = subscriber.slice(1)
+  }
+  return `+251${subscriber}`
+}
+
 /**
  * The only place that reads and writes auth.users. Kept pen-and-paper SQL on purpose: the query
  * text is short, the schema is stable, and every access here is one of five shapes that an ORM
@@ -43,13 +60,26 @@ export class UsersRepository {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   async findByPhoneE164(phoneE164: string): Promise<UserRow | null> {
-    const withPlus = phoneE164.startsWith('+') ? phoneE164 : `+${phoneE164}`
-    const withoutPlus = phoneE164.replace(/^\+/, '')
+    const normalized = normalizeEthiopianPhoneE164(phoneE164) || phoneE164.trim()
+    const withPlus = normalized.startsWith('+') ? normalized : `+${normalized}`
+    const withoutPlus = withPlus.replace(/^\+/, '')
+    const digitsOnly = withPlus.replace(/\D/g, '')
+    const last9 = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : ''
+
     const { rows } = await this.pool.query<UserRow>(
       `select ${USER_COLUMNS} from auth.users
-       where (phone_e164 = $1 or phone_e164 = $2 or phone = $1 or phone = $2)
-         and deleted_at is null`,
-      [withPlus, withoutPlus],
+       where (
+         phone_e164 = $1
+         or phone_e164 = $2
+         or phone = $1
+         or phone = $2
+         or ($3 <> '' and right(regexp_replace(phone_e164, '\\D', '', 'g'), 9) = $3)
+         or ($3 <> '' and right(regexp_replace(phone, '\\D', '', 'g'), 9) = $3)
+       )
+         and deleted_at is null
+       order by created_at desc
+       limit 1`,
+      [withPlus, withoutPlus, last9],
     )
     return rows[0] ? toUserRow(rows[0]) : null
   }

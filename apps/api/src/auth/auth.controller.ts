@@ -80,6 +80,19 @@ export class AuthController {
     }
   }
 
+  /** Pre-validates whether a phone number (or MOH license) is available before registration/payment. */
+  @Post('check-phone')
+  @HttpCode(200)
+  async checkPhone(
+    @Body() body: { phone_e164?: string; phone?: string; licence_number?: string },
+  ): Promise<unknown> {
+    try {
+      return await this.registration.checkPhoneAvailability(body || {})
+    } catch (error) {
+      throw this.toHttp(error)
+    }
+  }
+
   /** Registers a customer account with its first session. */
   @Post('register/customer')
   @HttpCode(201)
@@ -177,6 +190,15 @@ export class AuthController {
       return new HttpException(
         { code: ErrorCode.UNAUTHENTICATED, message: 'Your session has expired. Sign in again.' },
         401,
+      )
+    }
+    if (error && typeof error === 'object' && (error as { code?: string }).code === '23505') {
+      return new HttpException(
+        {
+          code: ErrorCode.CONFLICT,
+          message: 'This phone number is already registered. Please sign in or use a different phone number.',
+        },
+        httpStatusFor(ErrorCode.CONFLICT),
       )
     }
     return error as HttpException

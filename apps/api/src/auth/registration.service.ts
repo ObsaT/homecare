@@ -10,7 +10,7 @@ import {
 import type Redis from 'ioredis'
 import { Pool, type PoolClient } from 'pg'
 import { PG_POOL, withTransaction } from '../db/db.module'
-import { UsersRepository } from '../db/users.repository'
+import { UsersRepository, normalizeEthiopianPhoneE164 } from '../db/users.repository'
 import { REDIS } from '../redis/redis.module'
 import { hashPassword, randomOpaqueToken, sha256Hex } from '../crypto/crypto'
 import { SessionService, type SessionContext } from './session.service'
@@ -89,6 +89,57 @@ export class RegistrationService {
     @Inject(EventsService) private readonly eventsService: EventsService,
   ) {}
 
+  async checkPhoneAvailability(input: {
+    phone_e164?: string
+    phone?: string
+    licence_number?: string
+  }): Promise<{ available: boolean; phone_e164: string; message?: string }> {
+    const rawPhone = (input.phone_e164 || input.phone || '').trim()
+    const normalized = normalizeEthiopianPhoneE164(rawPhone)
+    const subscriberDigits = normalized.replace(/^\+251/, '')
+
+    if (!normalized || subscriberDigits.length !== 9 || !/^[79]\d{8}$/.test(subscriberDigits)) {
+      return {
+        available: false,
+        phone_e164: normalized || rawPhone,
+        message: 'Please enter a valid 9-digit Ethiopian mobile number (e.g. 09XXXXXXXX or 07XXXXXXXX).',
+      }
+    }
+
+    const existing = await this.users.findByPhoneE164(normalized)
+    if (existing) {
+      return {
+        available: false,
+        phone_e164: normalized,
+        message: 'This phone number is already registered. Please sign in or use a different phone number.',
+      }
+    }
+
+    const lic = (input.licence_number || '').trim()
+    if (lic && lic.length >= 4 && !['MOH/RN/', 'MOH/PENDING', 'PENDING_DOCUMENT_UPLOAD'].includes(lic.toUpperCase())) {
+      const dupLic = await this.pool.query<{ user_id: string }>(
+        `select cp.user_id from ops.caregiver_profiles cp
+         join auth.users u on u.id = cp.user_id
+         where lower(trim(cp.licence_number)) = lower(trim($1))
+           and u.deleted_at is null
+         limit 1`,
+        [lic],
+      )
+      if (dupLic.rows[0]) {
+        return {
+          available: false,
+          phone_e164: normalized,
+          message: 'This MOH license number is already registered to another caregiver.',
+        }
+      }
+    }
+
+    return {
+      available: true,
+      phone_e164: normalized,
+    }
+  }
+
   async issueRegisterToken(
     phoneE164: string,
     purpose: string,
@@ -107,22 +158,26 @@ export class RegistrationService {
 
     if (input.register_token) {
       const payload = await this.consumeRegisterToken(input.register_token)
-      phoneE164 = payload.phoneE164
+      phoneE164 = normalizeEthiopianPhoneE164(payload.phoneE164) || payload.phoneE164
     } else if (input.phone_e164) {
-      let clean = input.phone_e164.trim()
-      if (!clean.startsWith('+')) clean = `+${clean}`
-      if (!clean.startsWith('+251')) {
-        const digits = clean.replace(/^\+?0?/, '')
-        clean = `+251${digits}`
-      }
-      phoneE164 = clean
-
-      const existing = await this.users.findByPhoneE164(phoneE164)
-      if (existing) {
-        throw new AuthError(ErrorCode.CONFLICT, 'Phone number is already registered. Please log in.')
+      phoneE164 = normalizeEthiopianPhoneE164(input.phone_e164)
+      const subscriberDigits = phoneE164.replace(/^\+251/, '')
+      if (!phoneE164 || subscriberDigits.length !== 9) {
+        throw new AuthError(
+          ErrorCode.VALIDATION_ERROR,
+          'Please enter a valid Ethiopian mobile phone number.',
+        )
       }
     } else {
       throw new AuthError(ErrorCode.VALIDATION_ERROR, 'phone_e164 or register_token is required')
+    }
+
+    const existing = await this.users.findByPhoneE164(phoneE164)
+    if (existing) {
+      throw new AuthError(
+        ErrorCode.CONFLICT,
+        'This phone number is already registered. Please sign in or use a different phone number.',
+      )
     }
 
     // Resolve sub-city
@@ -264,16 +319,16 @@ export class RegistrationService {
       )
     }
 
-    let phone = input.phone_e164.trim()
-    if (!phone.startsWith('+')) phone = `+${phone}`
-    if (!phone.startsWith('+251')) {
-      const digits = phone.replace(/^\+?0?/, '')
-      phone = `+251${digits}`
-    }
-
-    const existing = await this.users.findByPhoneE164(phone)
-    if (existing) {
-      throw new AuthError(ErrorCode.CONFLICT, 'Phone number is already registered. Please log in.')
+    const phone = normalizeEthiopianPhoneE164(input.phone_e164)
+    const availability = await this.checkPhoneAvailability({
+      phone_e164: phone,
+      licence_number: input.licence_number,
+    })
+    if (!availability.available) {
+      throw new AuthError(
+        ErrorCode.CONFLICT,
+        availability.message || 'This phone number is already registered. Please sign in.',
+      )
     }
 
     // Resolve home sub-city

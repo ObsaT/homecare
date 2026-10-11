@@ -15,14 +15,14 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController(text: '09');
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _woredaController = TextEditingController(text: '02');
-  final _houseController = TextEditingController(text: 'House 204');
+  final _woredaController = TextEditingController();
+  final _houseController = TextEditingController();
   final _landmarkController = TextEditingController();
   final _emergencyNameController = TextEditingController();
-  final _emergencyPhoneController = TextEditingController(text: '09');
-  final _emergencyRelController = TextEditingController(text: 'Family');
+  final _emergencyPhoneController = TextEditingController();
+  final _emergencyRelController = TextEditingController();
 
   String _selectedSubCity = 'Bole';
   bool _agreedToTerms = true;
@@ -147,7 +147,31 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+
+                if (authState.errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            authState.errorMessage!,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.red.shade800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // Personal Details Section
                 const Text(
@@ -160,7 +184,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                   controller: _nameController,
                   decoration: const InputDecoration(
                     labelText: 'Full Name *',
-                    hintText: 'Abebe Bikila',
+                    hintText: 'Enter full name',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                   validator: (v) => v == null || v.trim().length < 2 ? 'Please enter your full name' : null,
@@ -172,7 +196,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Phone Number (Ethiopia) *',
-                    hintText: '0911555555',
+                    hintText: '09XXXXXXXX',
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                   validator: (v) => v == null || v.trim().length < 9 ? 'Please enter a valid phone number' : null,

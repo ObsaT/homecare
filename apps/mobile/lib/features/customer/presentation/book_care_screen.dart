@@ -19,22 +19,22 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
 
   // Form Fields
   late String _selectedService;
-  final _patientNameController = TextEditingController(text: 'Kebede Michael');
-  final _patientAgeController = TextEditingController(text: '72');
+  final _patientNameController = TextEditingController();
+  final _patientAgeController = TextEditingController();
   String _patientGender = 'MALE';
   String _mobility = 'NEEDS_ASSISTANCE';
-  final _careNeedsController = TextEditingController(text: 'Dressing change on left knee wound');
+  final _careNeedsController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
   int _durationMinutes = 60;
 
   String _selectedSubCity = 'Bole';
-  final _addressController = TextEditingController(text: 'Bole Atlas, near Edna Mall');
-  final _landmarkController = TextEditingController(text: 'Behind Atlas Hotel');
+  final _addressController = TextEditingController();
+  final _landmarkController = TextEditingController();
 
-  final _emergencyNameController = TextEditingController(text: 'Aster Kebede');
-  final _emergencyPhoneController = TextEditingController(text: '+251911223344');
+  final _emergencyNameController = TextEditingController();
+  final _emergencyPhoneController = TextEditingController();
 
   bool _submitting = false;
 

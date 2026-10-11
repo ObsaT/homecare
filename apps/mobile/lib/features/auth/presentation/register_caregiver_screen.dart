@@ -18,15 +18,17 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
 
   // Step 1 Controllers
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController(text: '09');
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _licenceController = TextEditingController(text: 'MOH/RN/');
-  final _expController = TextEditingController(text: '3');
+  final _licenceController = TextEditingController();
+  final _expController = TextEditingController();
 
   String _selectedTitle = 'Registered Nurse (RN)';
   String _selectedQualification = 'BSc Nursing';
   String _selectedSubCity = 'Bole';
   bool _obscurePassword = true;
+  bool _isCheckingPhone = false;
+  String? _profileStepError;
 
   // Step 2 Telebirr Sandbox State & Controllers
   final _telebirrPhoneController = TextEditingController();
@@ -122,8 +124,35 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
     if (!mounted) return;
 
     final phone = _phoneController.text.trim();
+    final licence = _licenceController.text.trim();
+
+    setState(() {
+      _isCheckingPhone = true;
+      _profileStepError = null;
+    });
+
+    final availability = await ref
+        .read(authProvider.notifier)
+        .checkPhoneAvailability(phone, licenceNumber: licence);
+
+    if (!mounted) return;
+
+    if (availability['available'] != true) {
+      final errMsg = availability['message']?.toString() ??
+          'This phone number is already registered. Please sign in or use a different phone number.';
+      setState(() {
+        _isCheckingPhone = false;
+        _profileStepError = errMsg;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.red.shade700, content: Text(errMsg)),
+      );
+      return;
+    }
+
     _telebirrPhoneController.text = phone;
     setState(() {
+      _isCheckingPhone = false;
       _currentStep = 2;
       _isCreatingSandboxOrder = true;
       _sandboxError = null;
@@ -317,7 +346,31 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
               ],
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
+
+          if (_profileStepError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _profileStepError!,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.red.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           const Text(
             'Personal & Account Credentials',
@@ -329,7 +382,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             controller: _nameController,
             decoration: const InputDecoration(
               labelText: 'Full Name (as on Medical ID) *',
-              hintText: 'Sister Almaz Hailu',
+              hintText: 'Enter full name',
               prefixIcon: Icon(Icons.person_outline),
             ),
             validator: (v) => v == null || v.trim().length < 2 ? 'Please enter your full name' : null,
@@ -341,7 +394,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(
               labelText: 'Phone Number *',
-              hintText: '0911223344',
+              hintText: '09XXXXXXXX',
               prefixIcon: Icon(Icons.phone_outlined),
             ),
             validator: (v) => v == null || v.trim().length < 9 ? 'Please enter a valid phone number' : null,
@@ -404,7 +457,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                   controller: _licenceController,
                   decoration: const InputDecoration(
                     labelText: 'MOH License Number',
-                    hintText: 'MOH/RN/44120',
+                    hintText: 'e.g. MOH/RN/44120',
                   ),
                 ),
               ),
@@ -416,7 +469,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Years Exp.',
-                    hintText: '3',
+                    hintText: 'e.g. 3',
                   ),
                 ),
               ),
@@ -438,27 +491,43 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
           const SizedBox(height: 28),
 
           ElevatedButton(
-            onPressed: _proceedToPayment,
+            onPressed: _isCheckingPhone ? null : _proceedToPayment,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0072BC),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'Continue to Telebirr Sandbox',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '(ETB ${_registrationFeeEtb.toStringAsFixed(0)})',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white70),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
-              ],
-            ),
+            child: _isCheckingPhone
+                ? const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Checking Phone & License...',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Continue to Telebirr Sandbox',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '(ETB ${_registrationFeeEtb.toStringAsFixed(0)})',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white70),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                    ],
+                  ),
           ),
           const SizedBox(height: 16),
         ],

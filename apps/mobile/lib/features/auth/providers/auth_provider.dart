@@ -46,6 +46,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
     restoreSession();
   }
 
+  static String normalizePhoneE164(String raw) {
+    final digitsOnly = raw.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.isEmpty) return '';
+    String subscriber = digitsOnly;
+    if (subscriber.startsWith('251') && subscriber.length >= 12) {
+      subscriber = subscriber.substring(3);
+    }
+    while (subscriber.startsWith('0') && subscriber.length > 9) {
+      subscriber = subscriber.substring(1);
+    }
+    if (subscriber.startsWith('0') && subscriber.length == 10) {
+      subscriber = subscriber.substring(1);
+    }
+    return '+251$subscriber';
+  }
+
+  static String _extractErrorMessage(Object e, String fallback) {
+    try {
+      final dynamic errObj = e;
+      final respData = errObj.response?.data;
+      if (respData is Map) {
+        final nestedMsg = respData['error'] is Map ? respData['error']['message']?.toString() : null;
+        if (nestedMsg != null && nestedMsg.isNotEmpty) return nestedMsg;
+        final topMsg = respData['message']?.toString();
+        if (topMsg != null && topMsg.isNotEmpty) return topMsg;
+      }
+      final status = errObj.response?.statusCode;
+      if (status == 409) {
+        return 'This phone number is already registered. Please sign in or use a different phone number.';
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
   Future<void> restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -55,13 +89,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final userName = prefs.getString('hc_user_name');
       final userRoleStr = prefs.getString('hc_user_role');
 
-      if (token != null && token.isNotEmpty && userId != null) {
+      if (token != null && token.isNotEmpty && userId != null && userName != null && userName.isNotEmpty) {
         _api.setToken(token);
         final role = userRoleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
         final user = AppUser(
           id: userId,
-          phone: userPhone ?? '+251911555555',
-          fullName: userName ?? 'Abebe Bikila',
+          phone: userPhone ?? '',
+          fullName: userName,
           role: role,
           isAvailable: true,
         );
@@ -74,11 +108,64 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {}
   }
 
+  Future<Map<String, dynamic>> checkPhoneAvailability(String phone, {String? licenceNumber}) async {
+    final normalized = normalizePhoneE164(phone);
+    final subscriber = normalized.replaceFirst(RegExp(r'^\+251'), '');
+    if (normalized.isEmpty || subscriber.length != 9 || !RegExp(r'^[79]\d{8}$').hasMatch(subscriber)) {
+      return {
+        'available': false,
+        'phone_e164': normalized,
+        'message': 'Please enter a valid 9-digit Ethiopian mobile number (e.g. 09XXXXXXXX or 07XXXXXXXX).',
+      };
+    }
+
+    try {
+      final res = await _api.dio.post('/auth/check-phone', data: {
+        'phone_e164': normalized,
+        if (licenceNumber != null && licenceNumber.trim().isNotEmpty)
+          'licence_number': licenceNumber.trim(),
+      });
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      if (data is Map) {
+        return {
+          'available': data['available'] == true,
+          'phone_e164': data['phone_e164']?.toString() ?? normalized,
+          'message': data['message']?.toString(),
+        };
+      }
+    } catch (e) {
+      try {
+        final dynamic errObj = e;
+        if (errObj.response?.statusCode == 404) {
+          return {
+            'available': true,
+            'phone_e164': normalized,
+          };
+        }
+      } catch (_) {}
+      final msg = _extractErrorMessage(
+        e,
+        'Unable to verify phone number availability. Please check your connection.',
+      );
+      return {
+        'available': false,
+        'phone_e164': normalized,
+        'message': msg,
+      };
+    }
+
+    return {
+      'available': true,
+      'phone_e164': normalized,
+    };
+  }
+
   Future<bool> loginWithPassword(String phone, String password) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
+      final phoneNormalized = normalizePhoneE164(phone);
       final res = await _api.dio.post('/auth/login', data: {
-        'phone_e164': phone,
+        'phone_e164': phoneNormalized,
         'password': password,
       });
       final data = res.data;
@@ -94,9 +181,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final userRole = roleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
 
       final user = AppUser(
-        id: rawUser['id'] ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
-        phone: rawUser['phone_e164'] ?? phone,
-        fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz Hailu (RN)' : 'Abebe Bikila'),
+        id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164']?.toString() ?? phoneNormalized,
+        fullName: rawUser['full_name']?.toString() ?? 'User',
         role: userRole,
         isAvailable: true,
       );
@@ -120,7 +207,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Invalid phone or password. Use demo account or tap 1-tap sign in.',
+        errorMessage: _extractErrorMessage(
+          e,
+          'Invalid phone number or password. Please check your credentials or register a new account.',
+        ),
       );
       return false;
     }
@@ -129,8 +219,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> requestOtp(String phone) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
+      final phoneNormalized = normalizePhoneE164(phone);
       final res = await _api.dio.post('/auth/otp/request', data: {
-        'phone_e164': phone,
+        'phone_e164': phoneNormalized,
         'purpose': 'LOGIN',
       });
       final challengeId = res.data['data']?['challenge_id'] ?? res.data['challenge_id'] ?? 'simulated-challenge';
@@ -159,9 +250,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final userRole = roleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
 
         final user = AppUser(
-          id: rawUser['id'] ?? 'usr-current',
-          phone: rawUser['phone_e164'] ?? '+251911555555',
-          fullName: rawUser['full_name'] ?? (userRole == UserRole.caregiver ? 'Sister Almaz (Nurse)' : 'Abebe Bikila'),
+          id: rawUser['id']?.toString() ?? 'usr-current',
+          phone: rawUser['phone_e164']?.toString() ?? '',
+          fullName: rawUser['full_name']?.toString() ?? 'User',
           role: userRole,
           isAvailable: true,
         );
@@ -192,7 +283,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Verification failed. Use password login or 1-tap sign-in.',
+        errorMessage: 'Verification failed. Please sign in with your account password.',
       );
       return false;
     }
@@ -217,7 +308,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final updated = AppUser(
         id: currentUser.id,
         phone: currentUser.phone,
-        fullName: newRole == UserRole.caregiver ? 'Sister Almaz Hailu (RN)' : 'Abebe Bikila',
+        fullName: currentUser.fullName,
         role: newRole,
         isAvailable: true,
       );
@@ -254,7 +345,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final res = await _api.dio.post('/payments/telebirr/create-order', data: {
         'amount_etb': amountEtb,
-        'phone_e164': phone,
+        'phone_e164': normalizePhoneE164(phone),
         'purpose': purpose,
         if (invoiceId != null) 'invoice_id': invoiceId,
         if (requestId != null) 'request_id': requestId,
@@ -290,7 +381,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final res = await _api.dio.post('/payments/telebirr/authorize', data: {
       if (prepayId != null) 'prepay_id': prepayId,
       if (merchOrderId != null) 'merch_order_id': merchOrderId,
-      'telebirr_phone': telebirrPhone,
+      'telebirr_phone': normalizePhoneE164(telebirrPhone),
       'pin': pin,
       'amount_etb': amountEtb,
       'purpose': purpose,
@@ -316,20 +407,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final phoneDigits = phone.trim().replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '');
-      final phoneNormalized = '+251$phoneDigits';
+      final phoneNormalized = normalizePhoneE164(phone);
+      final availability = await checkPhoneAvailability(phoneNormalized);
+      if (availability['available'] != true) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: availability['message']?.toString() ??
+              'This phone number is already registered. Please sign in or use a different phone number.',
+        );
+        return false;
+      }
+
+      final emPhoneRaw = emergencyPhone?.trim() ?? '';
+      final emPhoneNormalized = emPhoneRaw.isNotEmpty ? normalizePhoneE164(emPhoneRaw) : phoneNormalized;
 
       final res = await _api.dio.post('/auth/register/customer', data: {
         'full_name': fullName.trim(),
         'phone_e164': phoneNormalized,
         'password': password.trim(),
         'sub_city_name': subCity,
-        'woreda': woreda?.trim() ?? '01',
-        'house_number': houseNumber?.trim() ?? 'House 101',
+        'woreda': (woreda != null && woreda.trim().isNotEmpty) ? woreda.trim() : '01',
+        'house_number': (houseNumber != null && houseNumber.trim().isNotEmpty) ? houseNumber.trim() : '',
         'landmark': landmark?.trim() ?? '',
-        'emergency_contact_name': emergencyName?.trim() ?? 'Family Contact',
-        'emergency_contact_phone': emergencyPhone?.trim() ?? phoneNormalized,
-        'emergency_contact_relationship': emergencyRel?.trim() ?? 'Family',
+        'emergency_contact_name': (emergencyName != null && emergencyName.trim().isNotEmpty) ? emergencyName.trim() : fullName.trim(),
+        'emergency_contact_phone': emPhoneNormalized,
+        'emergency_contact_relationship': (emergencyRel != null && emergencyRel.trim().isNotEmpty) ? emergencyRel.trim() : 'Family',
       });
 
       final data = res.data;
@@ -344,7 +446,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = AppUser(
         id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
         phone: rawUser['phone_e164']?.toString() ?? phoneNormalized,
-        fullName: rawUser['full_name']?.toString() ?? fullName,
+        fullName: rawUser['full_name']?.toString() ?? fullName.trim(),
         role: UserRole.customer,
         isAvailable: true,
       );
@@ -368,7 +470,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Registration failed. Phone may already be registered or network issue.',
+        errorMessage: _extractErrorMessage(
+          e,
+          'Registration failed. This phone number may already be registered.',
+        ),
       );
       return false;
     }
@@ -395,8 +500,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final phoneDigits = phone.trim().replaceFirst(RegExp(r'^0'), '').replaceAll(RegExp(r'^\+251'), '');
-      final phoneNormalized = '+251$phoneDigits';
+      final phoneNormalized = normalizePhoneE164(phone);
+      final tbPhoneNormalized = normalizePhoneE164(telebirrPhone);
 
       final res = await _api.dio.post('/auth/register/caregiver', data: {
         'full_name': fullName.trim(),
@@ -404,11 +509,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'password': password.trim(),
         'professional_title': professionalTitle.trim(),
         'qualification_level': qualificationLevel.trim(),
-        'licence_number': licenceNumber?.trim() ?? 'MOH/PENDING',
-        'years_experience': yearsExperience ?? 2,
+        'licence_number': (licenceNumber != null && licenceNumber.trim().isNotEmpty)
+            ? licenceNumber.trim()
+            : 'MOH/PENDING',
+        'years_experience': yearsExperience ?? 1,
         'home_sub_city_name': subCity,
         'payment_method': 'TELEBIRR',
-        'telebirr_phone': telebirrPhone.trim(),
+        'telebirr_phone': tbPhoneNormalized.isNotEmpty ? tbPhoneNormalized : phoneNormalized,
         'telebirr_reference': telebirrReference.trim(),
         'confirm_sample_payment': true,
       });
@@ -425,7 +532,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = AppUser(
         id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
         phone: rawUser['phone_e164']?.toString() ?? phoneNormalized,
-        fullName: rawUser['full_name']?.toString() ?? fullName,
+        fullName: rawUser['full_name']?.toString() ?? fullName.trim(),
         role: UserRole.caregiver,
         isAvailable: true,
       );
@@ -449,7 +556,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Caregiver registration failed. Phone may already be registered or network error.',
+        errorMessage: _extractErrorMessage(
+          e,
+          'Caregiver registration failed. Phone number may already be registered.',
+        ),
       );
       return false;
     }

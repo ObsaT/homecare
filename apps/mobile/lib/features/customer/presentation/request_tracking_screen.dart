@@ -194,7 +194,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
   }
 
   Future<void> _showTelebirrSandboxModal(double amountEtb, String? invoiceId, String? invoiceNumber) async {
-    final userPhone = ref.read(authProvider).user?.phone ?? '0911555555';
+    final userPhone = ref.read(authProvider).user?.phone ?? '';
     final phoneCtrl = TextEditingController(text: userPhone);
     final pinCtrl = TextEditingController(text: '1234');
     bool isSubmitting = false;
