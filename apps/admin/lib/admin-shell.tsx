@@ -22,12 +22,14 @@ import {
   Volume2,
   Radio,
   CheckCircle2,
+  UserCheck,
 } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Request Queue', href: '/requests', icon: ClipboardList },
   { name: 'Caregivers & Nurses', href: '/caregivers', icon: Users },
+  { name: 'Patients & Households', href: '/customers', icon: UserCheck },
   { name: 'Live Comms & Dispatch', href: '/comms', icon: Radio },
   { name: 'Services & Pricing', href: '/services', icon: Stethoscope },
   { name: 'Finance & Payments', href: '/billing', icon: Receipt },

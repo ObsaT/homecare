@@ -89,6 +89,36 @@ export class DbModule implements OnModuleInit {
           created_at     timestamptz not null default now()
         );
       `)
+
+      // One-time clean slate check: ensure seeded demo Caregivers/Customers (11111111-1111-4111-8111-111111111111..22) are purged once
+      const cleanCheck = await this.pool.query(
+        `select 1 from fin.system_settings where setting_key = 'clean_slate_admin_only_v1'`,
+      )
+      if (cleanCheck.rows.length === 0) {
+        await this.pool.query(`
+          delete from ops.communications;
+          delete from clinical.vitals;
+          delete from clinical.visit_records;
+          delete from ops.reviews;
+          delete from fin.payments;
+          delete from fin.invoices;
+          delete from ops.assignments;
+          delete from ops.appointments;
+          delete from ops.requests;
+          delete from clinical.patient_medications;
+          delete from clinical.patients;
+          delete from ops.caregiver_services;
+          delete from ops.caregiver_settings;
+          delete from ops.caregiver_profiles;
+          delete from core.emergency_contacts;
+          delete from core.addresses where owner_user_id in (select id from auth.users where role in ('CAREGIVER', 'CUSTOMER'));
+          delete from auth.sessions where user_id in (select id from auth.users where role in ('CAREGIVER', 'CUSTOMER'));
+          delete from auth.users where role in ('CAREGIVER', 'CUSTOMER');
+          insert into fin.system_settings (setting_key, setting_value)
+          values ('clean_slate_admin_only_v1', '{"executed": true}'::jsonb)
+          on conflict (setting_key) do nothing;
+        `)
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[DbModule] Schema auto-sync skipped or partial:', err)

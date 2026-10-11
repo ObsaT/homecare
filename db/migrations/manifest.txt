@@ -7,3 +7,4 @@
 005_caregiver_location_dispatch.sql
 006_communications_and_settings.sql
 007_caregiver_registration_and_billing_schema.sql
+008_clean_slate_admin_only.sql

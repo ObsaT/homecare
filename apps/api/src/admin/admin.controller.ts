@@ -51,6 +51,76 @@ export class AdminController {
     return { data: await this.admin.updateCaregiverApproval(caregiverId, 'APPROVED', user.id) }
   }
 
+  @Post('caregivers/:id/status')
+  async updateCaregiverStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') caregiverId: string,
+    @Body() body: { status: 'APPROVED' | 'REJECTED' | 'SUSPENDED'; reason?: string },
+  ) {
+    return {
+      data: await this.admin.updateCaregiverApproval(caregiverId, body.status, user.id, body.reason),
+    }
+  }
+
+  @Delete('caregivers/:id')
+  async deleteCaregiver(@Param('id') caregiverId: string) {
+    return { data: await this.admin.deleteCaregiver(caregiverId) }
+  }
+
+  @Get('customers')
+  async listCustomers() {
+    return { data: await this.admin.listCustomers() }
+  }
+
+  @Post('customers/:id/status')
+  async updateCustomerStatus(
+    @Param('id') customerId: string,
+    @Body() body: { status: 'ACTIVE' | 'SUSPENDED' },
+  ) {
+    return { data: await this.admin.updateCustomerStatus(customerId, body.status) }
+  }
+
+  @Delete('customers/:id')
+  async deleteCustomer(@Param('id') customerId: string) {
+    return { data: await this.admin.deleteCustomer(customerId) }
+  }
+
+  @Get('invoices')
+  async listAllInvoices() {
+    return { data: await this.admin.listAllInvoices() }
+  }
+
+  @Post('invoices')
+  async createCustomerInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: { customer_user_id: string; request_id?: string; total_etb: number; notes?: string },
+  ) {
+    return { data: await this.admin.createCustomerInvoice(user.id, body) }
+  }
+
+  @Patch('invoices/:id/adjust')
+  async adjustCustomerInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') invoiceId: string,
+    @Body()
+    body: {
+      total_etb?: number
+      discount_etb?: number
+      surcharge_etb?: number
+      status?: 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID'
+      notes?: string
+    },
+  ) {
+    return { data: await this.admin.adjustCustomerInvoice(invoiceId, user.id, body) }
+  }
+
+  @Post('data-management/clear')
+  async clearPlatformData(
+    @Body() body: { mode: 'ALL_NON_ADMIN' | 'CAREGIVERS_ONLY' | 'CUSTOMERS_AND_REQUESTS_ONLY' },
+  ) {
+    return { data: await this.admin.clearPlatformData(body.mode || 'ALL_NON_ADMIN') }
+  }
+
   @Get('services')
   async listServices() {
     return { data: await this.catalog.listServices(true) }
