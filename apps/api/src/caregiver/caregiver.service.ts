@@ -385,12 +385,20 @@ export class CaregiverService {
       )
       const patientId = patRes.rows[0].patient_id
 
-      // 4. Create clinical.visit_records
+      // 4. Create or update clinical.visit_records (idempotent on appointment_id)
       const recRes = await client.query(
         `insert into clinical.visit_records (
           appointment_id, patient_id, caregiver_id, service_id, outcome,
           started_at, ended_at, observations, supplies_used, follow_up_required, follow_up_notes
         ) values ($1, $2, $3, $4, 'COMPLETED', $5, $6, $7, $8, $9, $10)
+        on conflict (appointment_id) do update set
+          outcome = 'COMPLETED',
+          ended_at = excluded.ended_at,
+          observations = coalesce(excluded.observations, clinical.visit_records.observations),
+          supplies_used = excluded.supplies_used,
+          follow_up_required = excluded.follow_up_required,
+          follow_up_notes = coalesce(excluded.follow_up_notes, clinical.visit_records.follow_up_notes),
+          updated_at = now()
         returning id`,
         [
           appointmentId,
@@ -407,9 +415,19 @@ export class CaregiverService {
       )
       const visitRecordId = recRes.rows[0].id
 
-      // 5. If vitals provided, record in clinical.vitals
+      // 5. If vitals provided, record in clinical.vitals (replace existing vitals for this visit_record_id if retried)
       if (input.vitals) {
         const v = input.vitals
+        const clampInt = (val: number | undefined, min: number, max: number) =>
+          val !== undefined && val !== null && Number.isFinite(Number(val))
+            ? Math.max(min, Math.min(max, Math.round(Number(val))))
+            : null
+        const clampNum = (val: number | undefined, min: number, max: number) =>
+          val !== undefined && val !== null && Number.isFinite(Number(val))
+            ? Math.max(min, Math.min(max, Number(val)))
+            : null
+
+        await client.query(`delete from clinical.vitals where visit_record_id = $1`, [visitRecordId])
         await client.query(
           `insert into clinical.vitals (
             visit_record_id, bp_systolic, bp_diastolic, heart_rate,
@@ -417,14 +435,14 @@ export class CaregiverService {
           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             visitRecordId,
-            v.bp_systolic || null,
-            v.bp_diastolic || null,
-            v.heart_rate || null,
-            v.temperature_c || null,
-            v.respiratory_rate || null,
-            v.oxygen_sat_pct || null,
-            v.blood_glucose_mg_dl || null,
-            v.weight_kg || null,
+            clampInt(v.bp_systolic, 40, 300),
+            clampInt(v.bp_diastolic, 20, 200),
+            clampInt(v.heart_rate, 20, 250),
+            clampNum(v.temperature_c, 30, 45),
+            clampInt(v.respiratory_rate, 4, 80),
+            clampInt(v.oxygen_sat_pct, 50, 100),
+            clampInt(v.blood_glucose_mg_dl, 20, 800),
+            clampNum(v.weight_kg, 0.5, 400),
             v.notes || null,
           ],
         )
