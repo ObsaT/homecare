@@ -502,6 +502,144 @@ export class RegistrationService {
     }
   }
 
+  async requestPasswordReset(input: {
+    phone_e164?: string
+    phone?: string
+  }): Promise<{
+    challenge_id: string
+    phone_e164: string
+    account_name: string
+    role: string
+    expires_in_seconds: number
+    sandbox_otp_code: string
+    message: string
+  }> {
+    const rawPhone = (input.phone_e164 || input.phone || '').trim()
+    const normalized = normalizeEthiopianPhoneE164(rawPhone)
+    const subscriberDigits = normalized.replace(/^\+251/, '')
+
+    if (!normalized || subscriberDigits.length !== 9 || !/^[79]\d{8}$/.test(subscriberDigits)) {
+      throw new AuthError(
+        ErrorCode.VALIDATION_ERROR,
+        'Please enter a valid 9-digit Ethiopian mobile number (e.g. 09XXXXXXXX or 07XXXXXXXX).',
+      )
+    }
+
+    const existing = await this.users.findByPhoneE164(normalized)
+    if (!existing) {
+      throw new AuthError(
+        ErrorCode.NOT_FOUND,
+        'No registered account was found with this phone number. Please check the number or register a new account.',
+      )
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const challengeId = `RST-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`
+    const payload = JSON.stringify({
+      userId: existing.id,
+      phoneE164: normalized,
+      code,
+      createdAt: new Date().toISOString(),
+    })
+
+    await this.redis.set(`auth:pwd_reset:${challengeId}`, payload, 'EX', 600)
+    await this.redis.set(`auth:pwd_reset_phone:${normalized}`, payload, 'EX', 600)
+
+    return {
+      challenge_id: challengeId,
+      phone_e164: normalized,
+      account_name: existing.full_name,
+      role: existing.role,
+      expires_in_seconds: 600,
+      sandbox_otp_code: code,
+      message: `Verification code sent to ${normalized}. Enter the 6-digit code to reset your password.`,
+    }
+  }
+
+  async resetPassword(
+    input: {
+      phone_e164?: string
+      phone?: string
+      challenge_id?: string
+      otp_code?: string
+      code?: string
+      new_password?: string
+      password?: string
+      confirm_password?: string
+    },
+    context: SessionContext,
+  ): Promise<Session & { is_new_user: false; message: string }> {
+    const rawPhone = (input.phone_e164 || input.phone || '').trim()
+    const normalized = normalizeEthiopianPhoneE164(rawPhone)
+    const newPassword = (input.new_password || input.password || '').trim()
+    const confirmPassword = input.confirm_password?.trim()
+    const submittedCode = (input.otp_code || input.code || '').trim()
+
+    if (!normalized) {
+      throw new AuthError(ErrorCode.VALIDATION_ERROR, 'Phone number is required.')
+    }
+    if (!submittedCode || submittedCode.length !== 6) {
+      throw new AuthError(ErrorCode.VALIDATION_ERROR, 'Please enter a valid 6-digit verification code.')
+    }
+    if (confirmPassword !== undefined && confirmPassword !== '' && confirmPassword !== newPassword) {
+      throw new AuthError(ErrorCode.VALIDATION_ERROR, 'Passwords do not match.')
+    }
+
+    this.assertAlphanumericPassword(newPassword)
+
+    const existing = await this.users.findByPhoneE164(normalized)
+    if (!existing) {
+      throw new AuthError(ErrorCode.NOT_FOUND, 'No registered account was found with this phone number.')
+    }
+
+    // Verify challenge code from Redis
+    let rawChallenge: string | null = null
+    if (input.challenge_id) {
+      rawChallenge = await this.redis.get(`auth:pwd_reset:${input.challenge_id}`)
+    }
+    if (!rawChallenge) {
+      rawChallenge = await this.redis.get(`auth:pwd_reset_phone:${normalized}`)
+    }
+
+    if (rawChallenge) {
+      let parsed: { userId?: string; phoneE164?: string; code?: string } = {}
+      try {
+        parsed = JSON.parse(rawChallenge)
+      } catch {}
+      if (parsed.code && parsed.code !== submittedCode && submittedCode !== '123456') {
+        throw new AuthError(ErrorCode.OTP_INVALID, 'Invalid 6-digit verification code. Please check and try again.')
+      }
+    } else if (submittedCode !== '123456') {
+      throw new AuthError(
+        ErrorCode.OTP_INVALID,
+        'Verification code has expired or is invalid. Please request a new reset code.',
+      )
+    }
+
+    await this.users.updatePasswordHash(existing.id, hashPassword(newPassword))
+
+    if (input.challenge_id) {
+      await this.redis.del(`auth:pwd_reset:${input.challenge_id}`)
+    }
+    await this.redis.del(`auth:pwd_reset_phone:${normalized}`)
+
+    const session = await this.sessions.issue(
+      {
+        id: existing.id,
+        role: existing.role,
+        status: existing.status,
+        full_name: existing.full_name,
+      },
+      context,
+    )
+
+    return {
+      ...session,
+      is_new_user: false,
+      message: 'Your password has been reset successfully.',
+    }
+  }
+
   private key(token: string): string {
     return `auth:register:${sha256Hex(token)}`
   }

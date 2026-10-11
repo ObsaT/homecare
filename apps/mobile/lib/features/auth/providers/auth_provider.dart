@@ -580,6 +580,111 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
+
+  Future<Map<String, dynamic>> requestPasswordReset(String phone) async {
+    final normalized = normalizePhoneE164(phone);
+    final subscriber = normalized.replaceFirst(RegExp(r'^\+251'), '');
+    if (normalized.isEmpty || subscriber.length != 9 || !RegExp(r'^[79]\d{8}$').hasMatch(subscriber)) {
+      return {
+        'success': false,
+        'message': 'Please enter a valid 9-digit Ethiopian mobile number (e.g. 09XXXXXXXX or 07XXXXXXXX).',
+      };
+    }
+
+    try {
+      final res = await _api.dio.post('/auth/password/forgot', data: {
+        'phone_e164': normalized,
+      });
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      if (data is Map) {
+        return {
+          'success': true,
+          'challenge_id': data['challenge_id']?.toString(),
+          'phone_e164': data['phone_e164']?.toString() ?? normalized,
+          'account_name': data['account_name']?.toString(),
+          'role': data['role']?.toString(),
+          'sandbox_otp_code': data['sandbox_otp_code']?.toString(),
+          'message': data['message']?.toString() ?? 'Verification code sent.',
+        };
+      }
+      return {'success': true, 'phone_e164': normalized};
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _extractErrorMessage(
+          e,
+          'No registered account was found with this phone number. Please check the number.',
+        ),
+      };
+    }
+  }
+
+  Future<bool> confirmPasswordReset({
+    required String phone,
+    String? challengeId,
+    required String otpCode,
+    required String newPassword,
+    required String confirmPassword,
+    bool deferAuthTransition = false,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final normalized = normalizePhoneE164(phone);
+      final res = await _api.dio.post('/auth/password/reset', data: {
+        'phone_e164': normalized,
+        if (challengeId != null) 'challenge_id': challengeId,
+        'otp_code': otpCode.trim(),
+        'new_password': newPassword.trim(),
+        'confirm_password': confirmPassword.trim(),
+      });
+
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      final token = data['access_token'];
+      if (token == null) {
+        state = state.copyWith(isLoading: false, errorMessage: 'Password reset succeeded, please sign in.');
+        return true;
+      }
+      _api.setToken(token.toString());
+
+      final rawUser = data['user'] ?? {};
+      final roleStr = (rawUser['role'] as String? ?? 'CUSTOMER').toUpperCase();
+      final userRole = roleStr == 'CAREGIVER' ? UserRole.caregiver : UserRole.customer;
+
+      final user = AppUser(
+        id: rawUser['id']?.toString() ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+        phone: rawUser['phone_e164']?.toString() ?? normalized,
+        fullName: rawUser['full_name']?.toString() ?? 'User',
+        role: userRole,
+        isAvailable: true,
+      );
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('hc_auth_token', token.toString());
+        await prefs.setString('hc_user_id', user.id);
+        await prefs.setString('hc_user_phone', user.phone);
+        await prefs.setString('hc_user_name', user.fullName);
+        await prefs.setString('hc_user_role', userRole == UserRole.caregiver ? 'CAREGIVER' : 'CUSTOMER');
+      } catch (_) {}
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: !deferAuthTransition,
+        token: token.toString(),
+        user: user,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _extractErrorMessage(
+          e,
+          'Failed to reset password. Please check your 6-digit verification code.',
+        ),
+      );
+      return false;
+    }
+  }
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {

@@ -138,6 +138,41 @@ class AppStrings {
       AppLanguage.am: 'ወደ የይለፍ ቃል መግቢያ ተመለስ',
       AppLanguage.om: 'Gara Seensa Jecha Darbiitti Deebi\'i',
     },
+    'forgot_password_link': {
+      AppLanguage.en: 'Forgot Password?',
+      AppLanguage.am: 'የይለፍ ቃል ረሱ?',
+      AppLanguage.om: 'Jecha Darbii Dagattanii?',
+    },
+    'forgot_password_title': {
+      AppLanguage.en: 'Forgot & Reset Password',
+      AppLanguage.am: 'የይለፍ ቃል መቀየሪያ',
+      AppLanguage.om: 'Jecha Darbii Haaromsuu',
+    },
+    'forgot_password_subtitle': {
+      AppLanguage.en: 'Enter your registered phone number to receive a 6-digit verification code and set a new alphanumeric password.',
+      AppLanguage.am: 'የተመዘገቡበትን ስልክ ቁጥር ያስገቡ እና ባለ 6 አሃዝ ማረጋገጫ ኮድ በመጠቀም አዲስ የይለፍ ቃል ያስገቡ።',
+      AppLanguage.om: 'Lakkoofsa bilbilaa galmaa\'e galchuun koodii dijitii 6 fudhadhaa jecha darbii haaraa galchaa.',
+    },
+    'send_reset_code_btn': {
+      AppLanguage.en: 'Send Verification Code',
+      AppLanguage.am: 'የማረጋገጫ ኮድ ላክ',
+      AppLanguage.om: 'Koodii Mirkaneessaa Ergi',
+    },
+    'new_password_label': {
+      AppLanguage.en: 'New Password (Alphanumeric) *',
+      AppLanguage.am: 'አዲስ የይለፍ ቃል (ፊደል እና ቁጥር) *',
+      AppLanguage.om: 'Jecha Darbii Haaraa (Qubee fi Lakkoofsa) *',
+    },
+    'confirm_new_password_label': {
+      AppLanguage.en: 'Confirm New Password *',
+      AppLanguage.am: 'አዲሱን የይለፍ ቃል ያረጋግጡ *',
+      AppLanguage.om: 'Jecha Darbii Haaraa Mirkaneessaa *',
+    },
+    'reset_password_btn': {
+      AppLanguage.en: 'Reset Password & Sign In',
+      AppLanguage.am: 'የይለፍ ቃል ቀይር እና ግባ',
+      AppLanguage.om: 'Jecha Darbii Haaromsiitii Seeni',
+    },
 
     // Customer Registration
     'customer_reg_title': {

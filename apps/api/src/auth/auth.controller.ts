@@ -121,6 +121,43 @@ export class AuthController {
     }
   }
 
+  /** Requests a 6-digit password reset verification code for a registered phone number. */
+  @Post('password/forgot')
+  @HttpCode(200)
+  async forgotPassword(
+    @Body() body: { phone_e164?: string; phone?: string },
+  ): Promise<unknown> {
+    try {
+      return await this.registration.requestPasswordReset(body || {})
+    } catch (error) {
+      throw this.toHttp(error)
+    }
+  }
+
+  /** Verifies the 6-digit reset code and sets a new alphanumeric password. */
+  @Post('password/reset')
+  @HttpCode(200)
+  async resetPassword(
+    @Body()
+    body: {
+      phone_e164?: string
+      phone?: string
+      challenge_id?: string
+      otp_code?: string
+      code?: string
+      new_password?: string
+      password?: string
+      confirm_password?: string
+    },
+    @Req() req: AuthenticatedRequest,
+  ): Promise<unknown> {
+    try {
+      return await this.registration.resetPassword(body || {}, sessionContext(req))
+    } catch (error) {
+      throw this.toHttp(error)
+    }
+  }
+
 
   @Post('login')
   @HttpCode(200)

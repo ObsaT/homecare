@@ -149,4 +149,16 @@ export class UsersRepository {
       [id, ip],
     )
   }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.pool.query(
+      `update auth.users
+       set password_hash = $2,
+           failed_login_count = 0,
+           locked_until = null,
+           updated_at = now()
+       where id = $1 and deleted_at is null`,
+      [id, passwordHash],
+    )
+  }
 }
