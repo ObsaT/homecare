@@ -24,7 +24,7 @@ class HomeCareApp extends ConsumerWidget {
     final authState = ref.watch(authProvider);
 
     return MaterialApp(
-      title: 'Home Care Addis',
+      title: 'Pillar Home Care',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: _buildHome(authState),

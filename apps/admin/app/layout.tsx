@@ -6,8 +6,8 @@ import { AuthGuard } from '../lib/auth-guard';
 import { AdminShell } from '../lib/admin-shell';
 
 export const metadata: Metadata = {
-  title: 'Home Care Ops — Addis Ababa Admin Control Desk',
-  description: 'Operations, dispatch, caregiver vetting, and billing platform for Addis Ababa home health care',
+  title: 'Pillar Home Care — Admin Control Desk',
+  description: 'Operations, dispatch, caregiver vetting, and billing platform for Pillar Home Care',
 };
 
 export default function RootLayout({

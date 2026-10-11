@@ -346,7 +346,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Join Addis Ababa Caregiver Network',
+                        'Join Pillar Home Care Network',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
                       ),
                       const SizedBox(height: 2),
@@ -656,7 +656,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
               ),
               const SizedBox(height: 8),
               const Text(
-                'Merchant: Addis Home Care Health Network (Shortcode: 884210)',
+                'Merchant: Pillar Home Care Health Network (Shortcode: 884210)',
                 style: TextStyle(fontSize: 11, color: Colors.white60),
               ),
               if (_sandboxMerchOrderId != null) ...[
@@ -709,7 +709,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
               const SizedBox(height: 8),
               Text(
                 _sandboxUssdPrompt ??
-                    'USSD Push (*127#): Confirm payment of ETB ${_registrationFeeEtb.toStringAsFixed(2)} to Addis Home Care (884210). Enter Telebirr PIN:',
+                    'USSD Push (*127#): Confirm payment of ETB ${_registrationFeeEtb.toStringAsFixed(2)} to Pillar Home Care (884210). Enter Telebirr PIN:',
                 style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'monospace', height: 1.4),
               ),
             ],

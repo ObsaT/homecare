@@ -359,11 +359,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'prepay_id': 'PREPAY-TB-$ts',
         'merch_order_id': 'HC-ORD-$ts',
         'short_code': '884210',
-        'merchant_name': 'Addis Home Care Health Network',
+        'merchant_name': 'Pillar Home Care Health Network',
         'amount_etb': amountEtb,
         'amount_santim': (amountEtb * 100).round(),
         'sandbox_mode': true,
-        'ussd_prompt': 'USSD Push (*127#) to $phone: Confirm payment of ETB ${amountEtb.toStringAsFixed(2)} to Addis Home Care (884210).',
+        'ussd_prompt': 'USSD Push (*127#) to $phone: Confirm payment of ETB ${amountEtb.toStringAsFixed(2)} to Pillar Home Care (884210).',
       };
     }
   }

@@ -18,7 +18,7 @@ void main() {
       );
 
       // Verify branding and subtitles
-      expect(find.text('Home Care Addis'), findsOneWidget);
+      expect(find.text('Pillar Home Care'), findsOneWidget);
       expect(find.text('Customer Mode'), findsOneWidget);
       expect(find.text('Caregiver / Nurse'), findsOneWidget);
       expect(find.text('Sign In With Account'), findsOneWidget);

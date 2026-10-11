@@ -1,11 +1,11 @@
 {
-    "name": "homecare_mobile",
-    "short_name": "homecare_mobile",
+    "name": "Pillar Home Care",
+    "short_name": "Pillar Home Care",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Pillar Home Care - Professional In-Home Clinical Care & Nurse Visits",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

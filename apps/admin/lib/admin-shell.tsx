@@ -73,7 +73,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <HeartPulse className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-base leading-tight text-[#151A19]">Home Care</h1>
+              <h1 className="font-bold text-base leading-tight text-[#151A19]">Pillar Home Care</h1>
               <p className="text-xs text-[#5A6360]">Addis Ababa HQ</p>
             </div>
           </div>

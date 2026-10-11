@@ -66,7 +66,7 @@ export class PaymentsService {
     return {
       sandbox_enabled: true,
       provider: 'ETHIO_TELECOM_TELEBIRR_SANDBOX',
-      merchant_name: 'Addis Home Care Health Network',
+      merchant_name: 'Pillar Home Care Health Network',
       short_code: process.env.TELEBIRR_SHORT_CODE || '884210',
       ussd_shortcode: '*127#',
       fabric_app_id: process.env.TELEBIRR_FABRIC_APP_ID || 'SANDBOX-FABRIC-APP-2026',
@@ -86,7 +86,7 @@ export class PaymentsService {
 
     let invoiceId = input.invoice_id
     let requestId = input.request_id
-    let title = input.title || 'Addis Home Care Telebirr Payment'
+    let title = input.title || 'Pillar Home Care Telebirr Payment'
 
     // If linked to an invoice or request, look up exact balance from DB
     if (invoiceId || requestId) {
@@ -108,7 +108,7 @@ export class PaymentsService {
         } else if (!amountSantim) {
           amountSantim = Number(inv.total_santim)
         }
-        title = `Home Care Invoice ${inv.invoice_number}`
+        title = `Pillar Home Care Invoice ${inv.invoice_number}`
       }
     }
 
@@ -132,7 +132,7 @@ export class PaymentsService {
       prepay_id: prepayId,
       merch_order_id: merchOrderId,
       short_code: shortCode,
-      merchant_name: 'Addis Home Care Health Network',
+      merchant_name: 'Pillar Home Care Health Network',
       amount_santim: amountSantim,
       amount_etb: amountEtb,
       currency: 'ETB',

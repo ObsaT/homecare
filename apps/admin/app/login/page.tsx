@@ -102,7 +102,7 @@ export default function AdminLoginPage() {
               <ShieldCheck className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white">Addis Home Care</h1>
+              <h1 className="text-xl font-bold tracking-tight text-white">Pillar Home Care</h1>
               <p className="text-xs text-emerald-400 font-medium">Operations & Clinical Control Desk</p>
             </div>
           </div>
@@ -129,7 +129,7 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="text-xs text-slate-500">
-          © 2026 Home Care Addis Ababa • Secure Clinical Portal v1.0
+          © 2026 Pillar Home Care • Secure Clinical Portal v1.0
         </div>
       </div>
 

@@ -108,7 +108,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: AppColors.primary,
-          content: Text('Account created successfully! Welcome to Home Care Addis.'),
+          content: Text('Account created successfully! Welcome to Pillar Home Care.'),
         ),
       );
       if (Navigator.of(context).canPop()) {
@@ -156,7 +156,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Create a patient account to request verified nurse visits & elderly home care across Addis Ababa.',
+                          'Create a patient account with Pillar Home Care to request verified nurse visits & elderly home care across Addis Ababa.',
                           style: TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.3),
                         ),
                       ),
@@ -382,7 +382,7 @@ class _RegisterCustomerScreenState extends ConsumerState<RegisterCustomerScreen>
                       child: Padding(
                         padding: EdgeInsets.only(top: 8.0),
                         child: Text(
-                          'I agree to the Home Care Addis Terms of Service, Privacy Policy, and medical health record processing.',
+                          'I agree to the Pillar Home Care Terms of Service, Privacy Policy, and medical health record processing.',
                           style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
                       ),

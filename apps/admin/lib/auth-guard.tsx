@@ -26,7 +26,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
-          <p className="text-sm font-medium text-gray-500">Loading Addis Home Care Portal...</p>
+          <p className="text-sm font-medium text-gray-500">Loading Pillar Home Care Portal...</p>
         </div>
       </div>
     );

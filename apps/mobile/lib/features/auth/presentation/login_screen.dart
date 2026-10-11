@@ -67,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Home Care Addis',
+                'Pillar Home Care',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 24,
