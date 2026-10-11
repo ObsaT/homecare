@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -39,16 +40,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final lang = ref.watch(languageProvider);
+    String tr(String key) => AppStrings.tr(lang, key);
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
+              // Language Selector Bar (English | አማርኛ | Afaan Oromoo)
+              const LanguageSelectorBar(),
+              const SizedBox(height: 22),
+
               // App Logo / Icon
               Center(
                 child: Container(
@@ -65,21 +71,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'Pillar Home Care',
+              const SizedBox(height: 20),
+              Text(
+                tr('app_name'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Professional in-home clinical care & nurse visits',
+              Text(
+                tr('app_subtitle'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
@@ -108,7 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 : null,
                           ),
                           child: Text(
-                            'Customer Mode',
+                            tr('customer_mode'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
@@ -132,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 : null,
                           ),
                           child: Text(
-                            'Caregiver / Nurse',
+                            tr('caregiver_mode'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
@@ -166,9 +172,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ],
 
               if (!_otpSent) ...[
-                const Text(
-                  'Enter Phone Number',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                Text(
+                  tr('enter_phone'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -190,9 +196,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Password',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                Text(
+                  tr('password'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -204,7 +210,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    hintText: 'Enter your password',
+                    hintText: tr('enter_password_hint'),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -225,7 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Text('Sign In With Account'),
+                      : Text(tr('sign_in_btn')),
                 ),
                 const SizedBox(height: 12),
                 if (_selectedRole == UserRole.caregiver) ...[
@@ -235,9 +241,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Color(0xFF0072BC)),
-                    label: const Text(
-                      'Register Caregiver',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
+                    label: Text(
+                      tr('register_caregiver_btn'),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
                     ),
                     onPressed: () async {
                       FocusManager.instance.primaryFocus?.unfocus();
@@ -255,9 +261,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     icon: const Icon(Icons.person_add_outlined, size: 18, color: AppColors.primary),
-                    label: const Text(
-                      'New Patient? Register Customer Account',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    label: Text(
+                      tr('register_customer_btn'),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                     ),
                     onPressed: () async {
                       FocusManager.instance.primaryFocus?.unfocus();
@@ -270,9 +276,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ] else ...[
-                const Text(
-                  'Enter 6-Digit Verification Code',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                Text(
+                  tr('enter_otp'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -297,19 +303,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Text('Verify & Enter App'),
+                      : Text(tr('verify_enter_btn')),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => setState(() => _otpSent = false),
-                  child: const Text('Back to Password Login'),
+                  child: Text(tr('back_to_password')),
                 ),
               ],
               const SizedBox(height: 24),
-              const Text(
-                'Target market: Addis Ababa • In-Home Health Care',
+              Text(
+                tr('target_market_footer'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
               ),
             ],
           ),

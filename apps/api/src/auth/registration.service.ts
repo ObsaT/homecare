@@ -40,6 +40,7 @@ export interface RegisterCaregiverInput {
   telebirr_phone?: string
   telebirr_reference?: string
   confirm_sample_payment?: boolean
+  preferred_language?: string
 }
 
 export interface FlexibleRegisterCustomerInput {
@@ -215,6 +216,10 @@ export class RegistrationService {
       subCityId = defaultSubCity.rows[0]?.id
     }
 
+    const prefLang = ['en', 'am', 'om'].includes((input.preferred_language || '').toLowerCase())
+      ? (input.preferred_language || 'en').toLowerCase()
+      : 'en'
+
     const userId = await withTransaction(this.pool, async (client) => {
       const { id } = await this.users.insert(client, {
         role: UserRole.CUSTOMER,
@@ -223,7 +228,7 @@ export class RegistrationService {
         fullName: input.full_name,
         email: input.email,
         passwordHash: hashPassword(input.password),
-        preferredLanguage: input.preferred_language || 'en',
+        preferredLanguage: prefLang,
       })
 
       // Consents
@@ -386,6 +391,10 @@ export class RegistrationService {
       input.telebirr_reference?.trim() || `TB-REG-${Date.now().toString().slice(-8)}`
     const telebirrPhone = input.telebirr_phone?.trim() || phone
 
+    const prefLang = ['en', 'am', 'om'].includes((input.preferred_language || '').toLowerCase())
+      ? (input.preferred_language || 'en').toLowerCase()
+      : 'en'
+
     const { userId, paymentId } = await withTransaction(this.pool, async (client) => {
       // 1. Create User
       const { id: uId } = await this.users.insert(client, {
@@ -394,7 +403,7 @@ export class RegistrationService {
         phoneE164: phone,
         fullName: input.full_name,
         passwordHash: hashPassword(input.password),
-        preferredLanguage: 'en',
+        preferredLanguage: prefLang,
       })
 
       await client.query(`update auth.users set is_available = true where id = $1`, [uId])

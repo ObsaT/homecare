@@ -51,6 +51,9 @@ export class DbModule implements OnModuleInit {
     if (process.env.NODE_ENV === 'test') return
     try {
       await this.pool.query(`
+        alter table auth.users drop constraint if exists users_preferred_language_check;
+        alter table auth.users add constraint users_preferred_language_check check (preferred_language in ('en', 'am', 'om'));
+
         alter table ops.caregiver_profiles
           add column if not exists coverage_sub_city_ids uuid[] not null default '{}',
           add column if not exists registration_fee_paid boolean default true,

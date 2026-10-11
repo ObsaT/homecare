@@ -400,9 +400,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? woreda,
     String? houseNumber,
     String? landmark,
+    double? latitude,
+    double? longitude,
     String? emergencyName,
     String? emergencyPhone,
     String? emergencyRel,
+    String preferredLanguage = 'en',
     bool deferAuthTransition = false,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -429,9 +432,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'woreda': (woreda != null && woreda.trim().isNotEmpty) ? woreda.trim() : '01',
         'house_number': (houseNumber != null && houseNumber.trim().isNotEmpty) ? houseNumber.trim() : '',
         'landmark': landmark?.trim() ?? '',
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
         'emergency_contact_name': (emergencyName != null && emergencyName.trim().isNotEmpty) ? emergencyName.trim() : fullName.trim(),
         'emergency_contact_phone': emPhoneNormalized,
         'emergency_contact_relationship': (emergencyRel != null && emergencyRel.trim().isNotEmpty) ? emergencyRel.trim() : 'Family',
+        'preferred_language': preferredLanguage,
       });
 
       final data = res.data;
@@ -458,6 +464,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setString('hc_user_phone', user.phone);
         await prefs.setString('hc_user_name', user.fullName);
         await prefs.setString('hc_user_role', 'CUSTOMER');
+        await prefs.setString('hc_customer_sub_city', subCity);
+        if (landmark != null && landmark.trim().isNotEmpty) {
+          await prefs.setString('hc_customer_landmark', landmark.trim());
+        }
+        if (latitude != null && longitude != null) {
+          await prefs.setDouble('hc_customer_lat', latitude);
+          await prefs.setDouble('hc_customer_lng', longitude);
+        }
       } catch (_) {}
 
       state = state.copyWith(
@@ -496,6 +510,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String subCity,
     required String telebirrPhone,
     required String telebirrReference,
+    String preferredLanguage = 'en',
     bool deferAuthTransition = false,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -518,6 +533,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'telebirr_phone': tbPhoneNormalized.isNotEmpty ? tbPhoneNormalized : phoneNormalized,
         'telebirr_reference': telebirrReference.trim(),
         'confirm_sample_payment': true,
+        'preferred_language': preferredLanguage,
       });
 
       final data = res.data;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 
@@ -32,15 +33,15 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
   bool _isCheckingPhone = false;
   String? _profileStepError;
 
-  static String? _validateAlphanumericPassword(String? value) {
+  String? _validateAlphanumericPassword(String? value, AppLanguage lang) {
     final v = value ?? '';
     if (v.length < 6) {
-      return 'Password must be at least 6 characters and alphanumeric (letters & numbers)';
+      return AppStrings.tr(lang, 'password_min_error');
     }
     final hasLetter = RegExp(r'[A-Za-z]').hasMatch(v);
     final hasNumber = RegExp(r'[0-9]').hasMatch(v);
     if (!hasLetter || !hasNumber) {
-      return 'Password must be alphanumeric (contain both letters and numbers)';
+      return AppStrings.tr(lang, 'password_alpha_error');
     }
     return null;
   }
@@ -234,6 +235,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
       }
 
       // 2. Register Caregiver with deferAuthTransition: true so we pop this screen cleanly before swapping root home
+      final lang = ref.read(languageProvider);
       final success = await authNotifier.registerCaregiver(
         fullName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -245,6 +247,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
         subCity: _selectedSubCity,
         telebirrPhone: _telebirrPhoneController.text.trim(),
         telebirrReference: receiptNo,
+        preferredLanguage: lang.code,
         deferAuthTransition: true,
       );
 
@@ -297,14 +300,20 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final lang = ref.watch(languageProvider);
+    String tr(String key) => AppStrings.tr(lang, key);
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(_currentStep == 1 ? 'Caregiver Clinical Onboarding' : 'telebirr Sandbox Checkout'),
+        title: Text(_currentStep == 1 ? tr('caregiver_reg_title') : 'telebirr Sandbox Checkout'),
         elevation: 0,
         backgroundColor: _currentStep == 2 ? const Color(0xFF0072BC) : null,
         foregroundColor: _currentStep == 2 ? Colors.white : null,
+        actions: [
+          LanguageDropdownChip(foregroundColor: _currentStep == 2 ? Colors.white : null),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -312,7 +321,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
           child: _currentStep == 1
               ? KeyedSubtree(
                   key: const ValueKey('caregiver_step_1_profile'),
-                  child: _buildProfileStep(authState),
+                  child: _buildProfileStep(authState, lang),
                 )
               : KeyedSubtree(
                   key: const ValueKey('caregiver_step_2_telebirr'),
@@ -323,12 +332,23 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
     );
   }
 
-  Widget _buildProfileStep(AuthState authState) {
+  Widget _buildProfileStep(AuthState authState, AppLanguage lang) {
+    String tr(String key) => AppStrings.tr(lang, key);
+
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Language Selector Bar
+          Text(
+            tr('select_language'),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          const LanguageSelectorBar(),
+          const SizedBox(height: 16),
+
           // Header alert
           Container(
             padding: const EdgeInsets.all(14),
@@ -345,9 +365,9 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Join Pillar Home Care Network',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
+                      Text(
+                        tr('caregiver_join_banner'),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0072BC)),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -388,32 +408,32 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             const SizedBox(height: 16),
           ],
 
-          const Text(
-            'Personal & Account Credentials',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          Text(
+            tr('personal_credentials_section'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 12),
 
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Full Name (as on Medical ID) *',
-              hintText: 'Enter full name',
-              prefixIcon: Icon(Icons.person_outline),
+            decoration: InputDecoration(
+              labelText: tr('full_name_medical_id'),
+              hintText: tr('full_name_hint'),
+              prefixIcon: const Icon(Icons.person_outline),
             ),
-            validator: (v) => v == null || v.trim().length < 2 ? 'Please enter your full name' : null,
+            validator: (v) => v == null || v.trim().length < 2 ? tr('full_name_error') : null,
           ),
           const SizedBox(height: 14),
 
           TextFormField(
             controller: _phoneController,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Phone Number *',
+            decoration: InputDecoration(
+              labelText: tr('phone_ethiopia'),
               hintText: '09XXXXXXXX',
-              prefixIcon: Icon(Icons.phone_outlined),
+              prefixIcon: const Icon(Icons.phone_outlined),
             ),
-            validator: (v) => v == null || v.trim().length < 9 ? 'Please enter a valid phone number' : null,
+            validator: (v) => v == null || v.trim().length < 9 ? tr('phone_error') : null,
           ),
           const SizedBox(height: 14),
 
@@ -423,9 +443,9 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             autovalidateMode: AutovalidateMode.onUserInteraction,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              labelText: 'Account Password (Alphanumeric) *',
-              hintText: 'Letters & numbers (e.g. Nurse2026)',
-              helperText: 'Must contain at least 6 characters with both letters and numbers',
+              labelText: tr('password_alphanumeric_label'),
+              hintText: tr('password_alphanumeric_hint'),
+              helperText: tr('password_alphanumeric_helper'),
               helperMaxLines: 2,
               errorMaxLines: 2,
               prefixIcon: const Icon(Icons.lock_outline),
@@ -434,7 +454,7 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                 onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
-            validator: _validateAlphanumericPassword,
+            validator: (v) => _validateAlphanumericPassword(v, lang),
           ),
           const SizedBox(height: 14),
 
@@ -444,8 +464,8 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             autovalidateMode: AutovalidateMode.onUserInteraction,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              labelText: 'Confirm Password *',
-              hintText: 'Re-enter your password',
+              labelText: tr('confirm_password_label'),
+              hintText: tr('confirm_password_hint'),
               errorMaxLines: 2,
               prefixIcon: const Icon(Icons.lock_reset_outlined),
               suffixIcon: IconButton(
@@ -455,27 +475,27 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
             ),
             validator: (v) {
               if (v == null || v.isEmpty) {
-                return 'Please confirm your password';
+                return tr('confirm_password_empty');
               }
               if (v != _passwordController.text) {
-                return 'Passwords do not match';
+                return tr('confirm_password_mismatch');
               }
-              return _validateAlphanumericPassword(v);
+              return _validateAlphanumericPassword(v, lang);
             },
           ),
           const SizedBox(height: 24),
 
-          const Text(
-            'Clinical Qualifications & Scope',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          Text(
+            tr('clinical_qualifications_section'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
             value: _selectedTitle,
-            decoration: const InputDecoration(
-              labelText: 'Professional Title *',
-              prefixIcon: Icon(Icons.medical_services_outlined),
+            decoration: InputDecoration(
+              labelText: tr('professional_title_label'),
+              prefixIcon: const Icon(Icons.medical_services_outlined),
             ),
             items: _titles.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
             onChanged: (val) {
@@ -486,9 +506,9 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
 
           DropdownButtonFormField<String>(
             value: _selectedQualification,
-            decoration: const InputDecoration(
-              labelText: 'Highest Qualification *',
-              prefixIcon: Icon(Icons.school_outlined),
+            decoration: InputDecoration(
+              labelText: tr('highest_qualification_label'),
+              prefixIcon: const Icon(Icons.school_outlined),
             ),
             items: _qualifications.map((q) => DropdownMenuItem(value: q, child: Text(q))).toList(),
             onChanged: (val) {
@@ -503,8 +523,8 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                 flex: 3,
                 child: TextFormField(
                   controller: _licenceController,
-                  decoration: const InputDecoration(
-                    labelText: 'MOH License Number',
+                  decoration: InputDecoration(
+                    labelText: tr('moh_license_label'),
                     hintText: 'e.g. MOH/RN/44120',
                   ),
                 ),
@@ -515,8 +535,8 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                 child: TextFormField(
                   controller: _expController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Years Exp.',
+                  decoration: InputDecoration(
+                    labelText: tr('years_exp_label'),
                     hintText: 'e.g. 3',
                   ),
                 ),
@@ -527,9 +547,9 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
 
           DropdownButtonFormField<String>(
             value: _selectedSubCity,
-            decoration: const InputDecoration(
-              labelText: 'Primary Base Sub-City *',
-              prefixIcon: Icon(Icons.location_on_outlined),
+            decoration: InputDecoration(
+              labelText: tr('base_sub_city_label'),
+              prefixIcon: const Icon(Icons.location_on_outlined),
             ),
             items: _subCities.map((sc) => DropdownMenuItem(value: sc, child: Text(sc))).toList(),
             onChanged: (val) {
@@ -563,9 +583,9 @@ class _RegisterCaregiverScreenState extends ConsumerState<RegisterCaregiverScree
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'Continue to Telebirr Sandbox',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      Text(
+                        tr('continue_telebirr_btn'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(width: 8),
                       Text(

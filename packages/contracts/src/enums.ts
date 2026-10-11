@@ -372,6 +372,7 @@ export type IncidentSeverity = z.infer<typeof IncidentSeveritySchema>
 export const Language = {
   EN: 'en',
   AM: 'am',
+  OM: 'om',
 } as const
-export const LanguageSchema = z.enum([Language.EN, Language.AM])
+export const LanguageSchema = z.enum([Language.EN, Language.AM, Language.OM])
 export type Language = z.infer<typeof LanguageSchema>

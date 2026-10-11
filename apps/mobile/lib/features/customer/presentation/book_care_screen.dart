@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/map_launcher_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/route_map_card.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'request_tracking_screen.dart';
 
@@ -38,6 +43,13 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
 
   bool _submitting = false;
 
+  // Google Route place verification & auto-register state
+  Timer? _placeDebounce;
+  bool _isVerifyingPlace = false;
+  VerifiedPlaceResult? _verifiedPlace;
+  bool _autoRegisterOnRouteMatch = true;
+  bool _launchGoogleMapsOnSubmit = false;
+
   final List<String> subCities = [
     'Addis Ketema',
     'Akaki Kality',
@@ -52,10 +64,112 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
     'Lemi Kura',
   ];
 
+  final List<String> _popularAddisPlaces = const [
+    'Edna Mall, Bole',
+    'Megenagna Square',
+    'CMC / St. Michael',
+    'Kazanchis / ECA',
+    'Sarbet / Old Airport',
+    'Mexico Square',
+    '4 Kilo / Arat Kilo',
+    'Piassa / Giorgis',
+    'Gerji / Imperial',
+    'Ayat Roundabout',
+    'Jemo / Mekanisa',
+    '22 Mazoria / Hayahulet',
+  ];
+
   @override
   void initState() {
     super.initState();
     _selectedService = widget.preselectedService ?? 'WOUND_CARE';
+    _loadSavedCustomerLocation();
+  }
+
+  Future<void> _loadSavedCustomerLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedSubCity = prefs.getString('hc_customer_sub_city');
+      final savedLandmark = prefs.getString('hc_customer_landmark');
+      final userName = ref.read(authProvider).user?.fullName;
+      if (userName != null && userName.isNotEmpty && _patientNameController.text.isEmpty) {
+        _patientNameController.text = userName;
+      }
+      if (savedSubCity != null && subCities.contains(savedSubCity)) {
+        setState(() => _selectedSubCity = savedSubCity);
+      }
+      if (savedLandmark != null && savedLandmark.isNotEmpty) {
+        _landmarkController.text = savedLandmark;
+        _addressController.text = savedLandmark;
+        await _verifyPlaceOnRoute(savedLandmark, triggerAutoSubmit: false);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _placeDebounce?.cancel();
+    _patientNameController.dispose();
+    _patientAgeController.dispose();
+    _careNeedsController.dispose();
+    _addressController.dispose();
+    _landmarkController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
+    super.dispose();
+  }
+
+  void _onPlaceChanged(String value) {
+    _placeDebounce?.cancel();
+    if (value.trim().length < 2) {
+      setState(() {
+        _verifiedPlace = null;
+        _isVerifyingPlace = false;
+      });
+      return;
+    }
+    setState(() => _isVerifyingPlace = true);
+    _placeDebounce = Timer(const Duration(milliseconds: 500), () {
+      _verifyPlaceOnRoute(value.trim(), triggerAutoSubmit: false);
+    });
+  }
+
+  Future<void> _verifyPlaceOnRoute(String query, {bool triggerAutoSubmit = false}) async {
+    if (!mounted || query.trim().length < 2) return;
+    setState(() => _isVerifyingPlace = true);
+
+    final result = await MapLauncherService.verifyPlaceOnGoogleRoute(
+      query.trim(),
+      fallbackSubCity: _selectedSubCity,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isVerifyingPlace = false;
+      _verifiedPlace = result;
+      if (result != null && subCities.contains(result.subCity)) {
+        _selectedSubCity = result.subCity;
+      }
+      if (result != null && _addressController.text.trim().isEmpty) {
+        _addressController.text = result.placeName;
+      }
+    });
+
+    if (result != null && result.exists && triggerAutoSubmit && _autoRegisterOnRouteMatch && !_submitting) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF059669),
+          duration: const Duration(seconds: 2),
+          content: Text(
+            '✅ Google Route verified: ${result.placeName} (${result.distanceKm.toStringAsFixed(1)} km). Auto-registering care visit & navigating...',
+          ),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        _submitBooking(openGoogleMaps: _launchGoogleMapsOnSubmit);
+      }
+    }
   }
 
   int get estimatedCostSantim {
@@ -65,7 +179,7 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
     return 50000;
   }
 
-  void _submitBooking() async {
+  Future<void> _submitBooking({bool openGoogleMaps = false}) async {
     final authState = ref.read(authProvider);
     if (!authState.isAuthenticated || authState.token == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,6 +193,25 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
 
     setState(() => _submitting = true);
     final api = ref.read(apiClientProvider);
+
+    // Ensure location is geocoded on Google Route before submitting
+    final rawPlace = _landmarkController.text.trim().isNotEmpty
+        ? _landmarkController.text.trim()
+        : _addressController.text.trim();
+    if (_verifiedPlace == null && rawPlace.isNotEmpty) {
+      final verified = await MapLauncherService.verifyPlaceOnGoogleRoute(
+        rawPlace,
+        fallbackSubCity: _selectedSubCity,
+      );
+      if (verified != null && mounted) {
+        setState(() {
+          _verifiedPlace = verified;
+          if (subCities.contains(verified.subCity)) {
+            _selectedSubCity = verified.subCity;
+          }
+        });
+      }
+    }
 
     final subCityMap = {
       'Addis Ketema': '11111111-1111-4111-8111-111111111101',
@@ -95,30 +228,67 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
     };
 
     final subCityId = subCityMap[_selectedSubCity] ?? '11111111-1111-4111-8111-111111111104';
+    final fallbackCoords = MapLauncherService.getSubCityCoords(_selectedSubCity) ?? [9.0016, 38.7852];
+    final effectiveLat = _verifiedPlace?.lat ?? fallbackCoords[0];
+    final effectiveLng = _verifiedPlace?.lng ?? fallbackCoords[1];
+    final effectiveLandmark = _verifiedPlace?.placeName ??
+        (_landmarkController.text.trim().isNotEmpty ? _landmarkController.text.trim() : '$_selectedSubCity Residence');
+    final effectiveAddress = _addressController.text.trim().isNotEmpty
+        ? _addressController.text.trim()
+        : effectiveLandmark;
+
     final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
     final timeStr = '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
 
     try {
       final res = await api.dio.post('/requests', data: {
         'service_code': _selectedService,
-        'patient_name': _patientNameController.text.trim().isNotEmpty ? _patientNameController.text.trim() : 'Patient',
+        'patient_name': _patientNameController.text.trim().isNotEmpty
+            ? _patientNameController.text.trim()
+            : (authState.user?.fullName ?? 'Patient'),
         'patient_age': int.tryParse(_patientAgeController.text) ?? 60,
         'patient_gender': _patientGender,
         'mobility': _mobility,
         'sub_city_id': subCityId,
-        'address': _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : '$_selectedSubCity Residence',
-        'landmark': _landmarkController.text.trim().isNotEmpty ? _landmarkController.text.trim() : null,
-        'emergency_contact_name': _emergencyNameController.text.trim().isNotEmpty ? _emergencyNameController.text.trim() : 'Family Contact',
-        'emergency_contact_phone': _emergencyPhoneController.text.trim().isNotEmpty ? _emergencyPhoneController.text.trim() : '+251911000000',
+        'address': effectiveAddress,
+        'landmark': effectiveLandmark,
+        'latitude': effectiveLat,
+        'longitude': effectiveLng,
+        'emergency_contact_name': _emergencyNameController.text.trim().isNotEmpty
+            ? _emergencyNameController.text.trim()
+            : (authState.user?.fullName ?? 'Family Contact'),
+        'emergency_contact_phone': _emergencyPhoneController.text.trim().isNotEmpty
+            ? _emergencyPhoneController.text.trim()
+            : (authState.user?.phone ?? '+251911000000'),
         'scheduled_date': dateStr,
         'scheduled_time': timeStr,
         'duration_minutes': _durationMinutes,
         'notes': _careNeedsController.text.trim().isNotEmpty ? _careNeedsController.text.trim() : null,
       });
 
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('hc_customer_sub_city', _selectedSubCity);
+        await prefs.setString('hc_customer_landmark', effectiveLandmark);
+        await prefs.setDouble('hc_customer_lat', effectiveLat);
+        await prefs.setDouble('hc_customer_lng', effectiveLng);
+      } catch (_) {}
+
       setState(() => _submitting = false);
       if (!mounted) return;
 
+      if (openGoogleMaps || _launchGoogleMapsOnSubmit) {
+        await MapLauncherService.launchNavigation(
+          destLat: effectiveLat,
+          destLng: effectiveLng,
+          destAddress: '$effectiveLandmark, $_selectedSubCity, Addis Ababa',
+          originLat: MapLauncherService.dispatchHubLat,
+          originLng: MapLauncherService.dispatchHubLng,
+          originAddress: MapLauncherService.dispatchHubTitle,
+        );
+      }
+
+      if (!mounted) return;
       final data = res.data['data'] ?? {};
       final reference = (data['reference'] ?? 'REQ-2026-948199').toString();
       final status = (data['status'] ?? 'SUBMITTED').toString();
@@ -127,7 +297,7 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Care request $reference created! Dispatched to Addis Ababa dispatch.'),
+          content: Text('Care request $reference registered with Google Route ($effectiveLandmark)!'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -174,15 +344,23 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Request Home Care'),
+        actions: const [
+          LanguageDropdownChip(),
+          SizedBox(width: 8),
+        ],
       ),
       body: Stepper(
         type: StepperType.horizontal,
         currentStep: _currentStep,
         onStepContinue: () {
+          if (_currentStep == 3 && _verifiedPlace != null && _autoRegisterOnRouteMatch) {
+            _submitBooking(openGoogleMaps: _launchGoogleMapsOnSubmit);
+            return;
+          }
           if (_currentStep < 4) {
             setState(() => _currentStep++);
           } else {
-            _submitBooking();
+            _submitBooking(openGoogleMaps: _launchGoogleMapsOnSubmit);
           }
         },
         onStepCancel: () {
@@ -193,16 +371,24 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
           }
         },
         controlsBuilder: (context, details) {
+          final isAutoRouteReady = _currentStep == 3 && _verifiedPlace != null && _autoRegisterOnRouteMatch;
           return Padding(
             padding: const EdgeInsets.only(top: 24.0),
             child: Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
+                    style: isAutoRouteReady
+                        ? ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669))
+                        : null,
                     onPressed: _submitting ? null : details.onStepContinue,
                     child: _submitting
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Text(_currentStep == 4 ? 'REQUEST CARE (${estimatedCostSantim ~/ 100} ETB)' : 'Continue'),
+                        : Text(
+                            isAutoRouteReady
+                                ? 'REGISTER & NAVIGATE ROUTE (${estimatedCostSantim ~/ 100} ETB)'
+                                : (_currentStep == 4 ? 'REQUEST CARE (${estimatedCostSantim ~/ 100} ETB)' : 'Continue'),
+                          ),
                   ),
                 ),
                 if (_currentStep > 0) ...[
@@ -366,15 +552,171 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
             ),
           ),
 
-          // Step 4: Location
+          // Step 4: Location with Google Route Auto-Verification & Auto-Navigate
           Step(
             title: const Text('Location'),
             isActive: _currentStep >= 3,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Addis Ababa Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Row(
+                  children: [
+                    const Icon(Icons.route_rounded, color: Color(0xFF1A73E8), size: 20),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Patient Location & Google Route',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                    if (_isVerifyingPlace)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1A73E8)),
+                      )
+                    else if (_verifiedPlace != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified_rounded, size: 13, color: Color(0xFF059669)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Route Found',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: _landmarkController,
+                  onChanged: _onPlaceChanged,
+                  onSubmitted: (v) => _verifyPlaceOnRoute(v, triggerAutoSubmit: true),
+                  decoration: InputDecoration(
+                    labelText: 'Nearby Landmark / Google Route Place (ታዋቂ ቦታ) *',
+                    hintText: 'e.g. Edna Mall, Megenagna, CMC, Sarbet, 4 Kilo...',
+                    helperText: 'Enter or select your place — if it exists in Google Route, it registers & navigates automatically.',
+                    helperMaxLines: 2,
+                    prefixIcon: const Icon(Icons.location_searching_rounded, color: Color(0xFF1A73E8)),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.travel_explore_rounded, color: Color(0xFF1A73E8)),
+                      tooltip: 'Check Google Route & Auto-Register',
+                      onPressed: () => _verifyPlaceOnRoute(_landmarkController.text, triggerAutoSubmit: true),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Quick Select Addis Ababa Google Route Chips
+                const Text(
+                  '1-Tap Addis Ababa Google Route Places:',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _popularAddisPlaces.map((place) {
+                    final isSelected = _landmarkController.text.trim().toLowerCase() == place.toLowerCase();
+                    return ActionChip(
+                      avatar: Icon(
+                        isSelected ? Icons.check_circle_rounded : Icons.place_outlined,
+                        size: 15,
+                        color: isSelected ? Colors.white : const Color(0xFF1A73E8),
+                      ),
+                      label: Text(
+                        place,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      backgroundColor: isSelected ? const Color(0xFF1A73E8) : const Color(0xFFEFF6FF),
+                      onPressed: () {
+                        _landmarkController.text = place;
+                        _addressController.text = place;
+                        _verifyPlaceOnRoute(place, triggerAutoSubmit: _autoRegisterOnRouteMatch);
+                      },
+                    );
+                  }).toList(),
+                ),
                 const SizedBox(height: 12),
+
+                // Auto-register & navigate toggle
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF1A73E8).withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.bolt_rounded, color: Color(0xFF1A73E8), size: 20),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Auto-register & navigate when place exists in Google Route',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E3A8A)),
+                            ),
+                          ),
+                          Switch(
+                            value: _autoRegisterOnRouteMatch,
+                            activeColor: const Color(0xFF1A73E8),
+                            onChanged: (v) => setState(() => _autoRegisterOnRouteMatch = v),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.navigation_outlined, color: Color(0xFF059669), size: 18),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Open external Google Maps GPS turn-by-turn directions on submit',
+                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ),
+                          Checkbox(
+                            value: _launchGoogleMapsOnSubmit,
+                            activeColor: const Color(0xFF059669),
+                            onChanged: (v) => setState(() => _launchGoogleMapsOnSubmit = v ?? false),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (_verifiedPlace != null) ...[
+                  RouteMapCard(
+                    originTitle: MapLauncherService.dispatchHubTitle,
+                    destinationTitle: '${_verifiedPlace!.subCity}, Addis Ababa',
+                    destinationLandmark: _verifiedPlace!.placeName,
+                    originLat: MapLauncherService.dispatchHubLat,
+                    originLng: MapLauncherService.dispatchHubLng,
+                    destLat: _verifiedPlace!.lat,
+                    destLng: _verifiedPlace!.lng,
+                    compact: true,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 DropdownButtonFormField<String>(
                   value: _selectedSubCity,
                   decoration: const InputDecoration(labelText: 'Sub-City (ክፍለ ከተማ)'),
@@ -386,12 +728,7 @@ class _BookCareScreenState extends ConsumerState<BookCareScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _addressController,
-                  decoration: const InputDecoration(labelText: 'Address / Area'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _landmarkController,
-                  decoration: const InputDecoration(labelText: 'Nearby Landmark (ታዋቂ ቦታ)'),
+                  decoration: const InputDecoration(labelText: 'House No. / Specific Street'),
                 ),
               ],
             ),

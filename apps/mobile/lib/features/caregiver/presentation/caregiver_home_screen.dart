@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/audio_notification_service.dart';
 import '../../../core/services/map_launcher_service.dart';
@@ -428,6 +429,9 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
     final feePaid = _profile?['registration_fee_paid'] == true;
     final paymentRef = _profile?['registration_payment_reference']?.toString();
 
+    final lang = ref.watch(languageProvider);
+    String tr(String key) => AppStrings.tr(lang, key);
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -435,12 +439,13 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
           children: [
             Text(user?.fullName ?? _profile?['full_name']?.toString() ?? 'Caregiver Portal', style: const TextStyle(fontSize: 16)),
             Text(
-              '${_profile?['professional_title'] ?? 'Registered Nurse'} • Addis Ababa',
+              '${_profile?['professional_title'] ?? 'Registered Nurse'} • ${tr('addis_ababa_ethiopia')}',
               style: const TextStyle(fontSize: 12, color: AppColors.primary),
             ),
           ],
         ),
         actions: [
+          const LanguageDropdownChip(),
           IconButton(
             icon: const Icon(Icons.volume_up_rounded, color: AppColors.primary),
             tooltip: 'Test Dispatch Alert Sound & Chime',
@@ -572,7 +577,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                           Text(
                             approvalStatus == 'APPROVED'
                                 ? 'Clinical License Verified & Active for Dispatch'
                                 : 'Clinical License: Pending Admin Approval',
@@ -624,7 +629,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _isAvailable ? 'Available for Dispatch' : 'Off-Duty / Unavailable',
+                            _isAvailable ? tr('available_for_dispatch') : tr('off_duty_unavailable'),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                           Text(
@@ -680,9 +685,9 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                       children: [
                         const Icon(Icons.location_on, color: AppColors.primary, size: 20),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Dispatch Coverage Zone',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        Text(
+                          tr('dispatch_coverage_zone'),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const Spacer(),
                         Container(
