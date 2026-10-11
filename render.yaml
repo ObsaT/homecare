@@ -13,7 +13,7 @@ services:
     name: homecare-api
     runtime: node
     plan: free
-    buildCommand: npm ci && npm --prefix apps/api run build
+    buildCommand: npm ci --include=dev && npm --prefix packages/contracts run build && npm --prefix apps/api run build
     startCommand: node scripts/migrate.mjs && node apps/api/dist/main.js
     healthCheckPath: /api/v1/health
     envVars:
@@ -33,7 +33,7 @@ services:
     name: homecare-admin
     runtime: node
     plan: free
-    buildCommand: npm ci && npm --prefix apps/admin run build
+    buildCommand: npm ci --include=dev && npm --prefix packages/contracts run build && npm --prefix packages/design-tokens run build && npm --prefix apps/admin run build
     startCommand: npx next start apps/admin -p $PORT
     envVars:
       - key: NODE_ENV

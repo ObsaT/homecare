@@ -9,7 +9,7 @@
     "apps/admin"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=20.11 <=24.x"
   },
   "scripts": {
     "build": "npm run build --workspaces --if-present",

@@ -23,12 +23,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "typescript": "^5.7.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "eslint": "^9.17.0",
-    "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "vitest": "^2.1.8"
   }
