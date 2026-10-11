@@ -6,3 +6,4 @@
 004_services_ext.sql
 005_caregiver_location_dispatch.sql
 006_communications_and_settings.sql
+007_caregiver_registration_and_billing_schema.sql
