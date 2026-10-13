@@ -40,10 +40,11 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
   StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
 
   final List<Map<String, String>> _statusSteps = const [
-    {'key': 'SUBMITTED', 'title': 'Requested', 'desc': 'Request received by Addis Ababa dispatch'},
-    {'key': 'UNDER_REVIEW', 'title': 'Under Review', 'desc': 'Clinical coordinator verifying requirements'},
-    {'key': 'ASSIGNED', 'title': 'Caregiver Assigned', 'desc': 'Certified nurse or caregiver matched'},
-    {'key': 'CONFIRMED', 'title': 'Confirmed', 'desc': 'Visit accepted and locked on calendar'},
+    {'key': 'SUBMITTED', 'title': 'Requested', 'desc': 'Request received by Admin Desk'},
+    {'key': 'UNDER_REVIEW', 'title': 'Admin Reviewing', 'desc': 'Admin checking available caregivers'},
+    {'key': 'ASSIGNED', 'title': 'Offer Sent', 'desc': 'Offer sent to matched caregiver'},
+    {'key': 'ACCEPTED', 'title': 'Caregiver Accepted', 'desc': 'Caregiver accepted; awaiting final admin dispatch'},
+    {'key': 'CONFIRMED', 'title': 'Admin Dispatched', 'desc': 'Visit approved & officially dispatched'},
     {'key': 'EN_ROUTE', 'title': 'Caregiver Arriving', 'desc': 'Caregiver on their way to your address'},
     {'key': 'IN_PROGRESS', 'title': 'In Progress', 'desc': 'Caregiver on site providing clinical care'},
     {'key': 'COMPLETED', 'title': 'Completed', 'desc': 'Visit finished with clinical observations recorded'},
@@ -406,14 +407,16 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
       case 'ASSIGNED':
       case 'OFFERED':
         return 2;
-      case 'CONFIRMED':
+      case 'ACCEPTED':
         return 3;
-      case 'EN_ROUTE':
+      case 'CONFIRMED':
         return 4;
-      case 'IN_PROGRESS':
+      case 'EN_ROUTE':
         return 5;
-      case 'COMPLETED':
+      case 'IN_PROGRESS':
         return 6;
+      case 'COMPLETED':
+        return 7;
       default:
         return 0;
     }
@@ -427,6 +430,7 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
       case 'EN_ROUTE':
         return AppColors.primary;
       case 'CONFIRMED':
+      case 'ACCEPTED':
       case 'ASSIGNED':
         return AppColors.secondary;
       case 'CANCELLED':
@@ -472,12 +476,13 @@ class _RequestTrackingScreenState extends ConsumerState<RequestTrackingScreen> {
             onSelected: (val) => setState(() => _currentStatus = val),
             itemBuilder: (ctx) => [
               const PopupMenuItem(value: 'SUBMITTED', child: Text('1. Requested')),
-              const PopupMenuItem(value: 'UNDER_REVIEW', child: Text('2. Under Review')),
-              const PopupMenuItem(value: 'ASSIGNED', child: Text('3. Caregiver Assigned')),
-              const PopupMenuItem(value: 'CONFIRMED', child: Text('4. Confirmed')),
-              const PopupMenuItem(value: 'EN_ROUTE', child: Text('5. Caregiver Arriving')),
-              const PopupMenuItem(value: 'IN_PROGRESS', child: Text('6. In Progress')),
-              const PopupMenuItem(value: 'COMPLETED', child: Text('7. Completed')),
+              const PopupMenuItem(value: 'UNDER_REVIEW', child: Text('2. Admin Reviewing')),
+              const PopupMenuItem(value: 'ASSIGNED', child: Text('3. Offer Sent to Caregiver')),
+              const PopupMenuItem(value: 'ACCEPTED', child: Text('4. Caregiver Accepted (Awaiting Dispatch)')),
+              const PopupMenuItem(value: 'CONFIRMED', child: Text('5. Admin Dispatched')),
+              const PopupMenuItem(value: 'EN_ROUTE', child: Text('6. Caregiver Arriving')),
+              const PopupMenuItem(value: 'IN_PROGRESS', child: Text('7. In Progress')),
+              const PopupMenuItem(value: 'COMPLETED', child: Text('8. Completed')),
             ],
           ),
         ],

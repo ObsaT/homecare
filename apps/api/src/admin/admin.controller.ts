@@ -38,6 +38,14 @@ export class AdminController {
     return { data: await this.admin.assignCaregiver(appointmentId, body.caregiver_id, user.id) }
   }
 
+  @Post('appointments/:id/dispatch')
+  async dispatchAppointment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') appointmentId: string,
+  ) {
+    return { data: await this.admin.dispatchAppointment(appointmentId, user.id) }
+  }
+
   @Get('caregivers')
   async listCaregivers() {
     return { data: await this.admin.listCaregivers() }

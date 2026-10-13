@@ -161,10 +161,10 @@ export class CaregiverService {
         [caregiverUserId, appointmentId],
       )
 
-      // Update parent request to CONFIRMED
+      // Update parent request to ACCEPTED (awaiting admin dispatch confirmation)
       const reqRes = await client.query(
         `update ops.requests
-         set status = 'CONFIRMED', updated_at = now()
+         set status = 'ACCEPTED', updated_at = now()
          where id = (select request_id from ops.appointments where id = $1)
          returning id, customer_user_id, reference`,
         [appointmentId],
@@ -184,10 +184,10 @@ export class CaregiverService {
           appointment_id: appointmentId,
           request_id: reqRes.rows[0].id,
           reference: reqRes.rows[0].reference,
-          status: 'CONFIRMED',
+          status: 'ACCEPTED',
           caregiver_id: caregiverUserId,
           caregiver_name: caregiverName,
-          message: 'Caregiver has accepted the assignment offer.',
+          message: 'Caregiver has accepted your visit request. Awaiting final admin dispatch.',
         })
       }
       this.eventsService.emitToRole('ADMIN', 'OFFER_ACCEPTED', {
@@ -196,10 +196,10 @@ export class CaregiverService {
         reference: reqRes.rows[0]?.reference,
         caregiver_id: caregiverUserId,
         caregiver_name: caregiverName,
-        status: 'CONFIRMED',
+        status: 'ACCEPTED',
       })
 
-      return { success: true, status: 'CONFIRMED', message: 'Assignment accepted' }
+      return { success: true, status: 'ACCEPTED', message: 'Assignment accepted and awaiting admin dispatch' }
     } catch (err) {
       await client.query('rollback')
       throw err

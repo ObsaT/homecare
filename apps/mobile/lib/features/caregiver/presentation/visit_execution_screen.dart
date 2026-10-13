@@ -508,7 +508,39 @@ class _VisitExecutionScreenState extends ConsumerState<VisitExecutionScreen> {
             // Action Buttons based on status
             if (_isSubmitting)
               const Center(child: CircularProgressIndicator())
-            else if (_visitStatus == 'CONFIRMED') ...[
+            else if (_visitStatus == 'ACCEPTED') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, color: Colors.amber.shade800, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Offer Accepted — Awaiting Admin Dispatch',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Admin is reviewing and finalizing dispatch. The journey button will activate immediately upon dispatch confirmation.',
+                            style: TextStyle(fontSize: 11, color: Colors.amber.shade800),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_visitStatus == 'CONFIRMED') ...[
               SizedBox(
                 width: double.infinity,
                 height: 48,

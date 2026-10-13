@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { Pool } from 'pg'
 import { PG_POOL } from '../db/db.module'
 import { EventsService } from '../events/events.service'
@@ -173,6 +173,96 @@ export class AdminService {
       }
 
       return { success: true, message: 'Caregiver assigned and assignment offer dispatched' }
+    } catch (err) {
+      await client.query('rollback')
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
+  async dispatchAppointment(appointmentId: string, adminUserId: string) {
+    const client = await this.pool.connect()
+    try {
+      await client.query('begin')
+
+      const apptRes = await client.query(
+        `select a.id, a.request_id, a.caregiver_id, a.status,
+                r.customer_user_id, r.reference,
+                s.name_en as service_name,
+                cg.full_name as caregiver_name, cg.phone_e164 as caregiver_phone,
+                c.full_name as customer_name,
+                coalesce(sc.name_en, a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city') as sub_city_name,
+                coalesce(a.address_snapshot->>'address', r.address_snapshot->>'address', 'Patient Residence') as address
+         from ops.appointments a
+         join ops.requests r on r.id = a.request_id
+         join catalog.services s on s.id = a.service_id
+         join auth.users c on c.id = r.customer_user_id
+         left join auth.users cg on cg.id = a.caregiver_id
+         left join catalog.sub_cities sc on lower(sc.name_en) = lower(coalesce(a.address_snapshot->>'sub_city', r.address_snapshot->>'sub_city'))
+         where a.id = $1`,
+        [appointmentId],
+      )
+      if (apptRes.rows.length === 0) {
+        throw new NotFoundException('Appointment not found')
+      }
+      const appt = apptRes.rows[0]
+
+      if (!appt.caregiver_id) {
+        throw new BadRequestException('Cannot dispatch an appointment without an assigned caregiver')
+      }
+
+      // Update appointment to CONFIRMED
+      await client.query(
+        `update ops.appointments set status = 'CONFIRMED', updated_at = now() where id = $1`,
+        [appointmentId],
+      )
+
+      // Update parent request to CONFIRMED
+      await client.query(
+        `update ops.requests set status = 'CONFIRMED', updated_at = now() where id = $1`,
+        [appt.request_id],
+      )
+
+      await client.query('commit')
+
+      // Emit to Customer
+      this.eventsService.emitToUser(appt.customer_user_id, 'VISIT_STATUS_CHANGED', {
+        appointment_id: appointmentId,
+        request_id: appt.request_id,
+        reference: appt.reference,
+        status: 'CONFIRMED',
+        caregiver_id: appt.caregiver_id,
+        caregiver_name: appt.caregiver_name,
+        caregiver_phone: appt.caregiver_phone,
+        message: `Admin has dispatched ${appt.caregiver_name || 'Caregiver'} for your visit!`,
+      })
+
+      // Emit to Caregiver
+      this.eventsService.emitToUser(appt.caregiver_id, 'VISIT_STATUS_CHANGED', {
+        appointment_id: appointmentId,
+        request_id: appt.request_id,
+        reference: appt.reference,
+        status: 'CONFIRMED',
+        message: 'Admin has approved and officially dispatched this visit. You may begin travel when ready.',
+      })
+
+      // Emit to Admin
+      this.eventsService.emitToRole('ADMIN', 'VISIT_STATUS_CHANGED', {
+        appointment_id: appointmentId,
+        request_id: appt.request_id,
+        reference: appt.reference,
+        status: 'CONFIRMED',
+        caregiver_id: appt.caregiver_id,
+        caregiver_name: appt.caregiver_name,
+        dispatched_by: adminUserId,
+      })
+
+      return {
+        success: true,
+        status: 'CONFIRMED',
+        message: `Appointment ${appt.reference} officially dispatched to ${appt.caregiver_name}`,
+      }
     } catch (err) {
       await client.query('rollback')
       throw err

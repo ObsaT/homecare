@@ -189,8 +189,32 @@ export default function RequestsPage() {
     if (res.error) {
       setMsg({ type: 'error', text: res.error.message || 'Failed to assign caregiver' });
     } else {
-      setMsg({ type: 'success', text: 'Caregiver assigned! Offer sent to caregiver mobile app.' });
+      setMsg({ type: 'success', text: 'Visit offer sent to caregiver mobile app! Awaiting caregiver acceptance.' });
       setSelectedAppointment(null);
+      loadData();
+    }
+  };
+
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+
+  const handleDispatch = async (req: RequestItem) => {
+    if (!req.appointment_id) return;
+    setDispatchingId(req.appointment_id);
+    setMsg(null);
+
+    const res = await apiFetch(`/admin/appointments/${req.appointment_id}/dispatch`, {
+      method: 'POST',
+    });
+
+    setDispatchingId(null);
+
+    if (res.error) {
+      setMsg({ type: 'error', text: res.error.message || 'Failed to dispatch appointment' });
+    } else {
+      setMsg({
+        type: 'success',
+        text: `Appointment #${req.reference} successfully dispatched to caregiver ${req.caregiver_name || ''}! Both patient and caregiver have been notified.`,
+      });
       loadData();
     }
   };
@@ -307,8 +331,10 @@ export default function RequestsPage() {
           {[
             { id: 'ALL', label: 'All Requests' },
             { id: 'REVIEW_NEEDED', label: 'Specialized Quote Needed' },
-            { id: 'SUBMITTED', label: 'Submitted' },
-            { id: 'ASSIGNED', label: 'Assigned' },
+            { id: 'SUBMITTED', label: 'New / Pending Review' },
+            { id: 'ASSIGNED', label: 'Offered to Caregiver' },
+            { id: 'ACCEPTED', label: 'Caregiver Accepted (Ready to Dispatch)' },
+            { id: 'CONFIRMED', label: 'Dispatched / Confirmed' },
             { id: 'IN_PROGRESS', label: 'In Progress' },
             { id: 'COMPLETED', label: 'Completed' },
           ].map((tab) => (
@@ -426,8 +452,12 @@ export default function RequestsPage() {
                               ? 'bg-amber-50 text-amber-800 border-amber-200'
                               : req.status === 'APPROVED'
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              : req.status === 'ASSIGNED' || req.status === 'ACCEPTED'
-                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : req.status === 'ASSIGNED'
+                              ? 'bg-sky-50 text-sky-800 border-sky-200'
+                              : req.status === 'ACCEPTED'
+                              ? 'bg-indigo-50 text-indigo-800 border-indigo-200 ring-2 ring-indigo-400/30'
+                              : req.status === 'CONFIRMED'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                               : req.status === 'IN_PROGRESS'
                               ? 'bg-purple-50 text-purple-800 border-purple-200'
                               : req.status === 'COMPLETED'
@@ -435,14 +465,30 @@ export default function RequestsPage() {
                               : 'bg-gray-50 text-gray-800 border-gray-200'
                           }`}
                         >
-                          {req.status}
+                          {req.status === 'ASSIGNED'
+                            ? 'OFFER SENT'
+                            : req.status === 'ACCEPTED'
+                            ? 'CG ACCEPTED'
+                            : req.status}
                         </span>
                       </td>
                       <td className="px-5 py-4">
                         {req.caregiver_name ? (
-                          <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{req.caregiver_name}</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{req.caregiver_name}</span>
+                            </div>
+                            {req.status === 'ACCEPTED' && (
+                              <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 mt-0.5 inline-block">
+                                Accepted • Ready to Dispatch
+                              </span>
+                            )}
+                            {req.status === 'ASSIGNED' && (
+                              <span className="text-[10px] text-sky-700 font-medium bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 mt-0.5 inline-block">
+                                Awaiting CG Response
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">
@@ -466,14 +512,31 @@ export default function RequestsPage() {
                             {isOther ? 'Quote' : 'Price'}
                           </button>
 
-                          {/* Assign Button */}
+                          {/* Admin Dispatch Button (When Caregiver Accepted) */}
+                          {req.status === 'ACCEPTED' ? (
+                            <button
+                              onClick={() => handleDispatch(req)}
+                              disabled={dispatchingId === req.appointment_id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition shadow-sm animate-pulse disabled:opacity-50"
+                              title="Officially dispatch caregiver to patient address"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              {dispatchingId === req.appointment_id ? 'Dispatching...' : 'Dispatch Now'}
+                            </button>
+                          ) : null}
+
+                          {/* Assign / Reassign Button */}
                           {req.appointment_id && req.status !== 'COMPLETED' ? (
                             <button
                               onClick={() => handleOpenAssignModal(req)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F6B5C] text-white font-semibold text-xs hover:bg-[#0A4F44] transition shadow-sm"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition shadow-sm ${
+                                req.status === 'ACCEPTED'
+                                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                                  : 'bg-[#0F6B5C] text-white hover:bg-[#0A4F44]'
+                              }`}
                             >
                               <UserPlus className="w-3.5 h-3.5" />
-                              {req.caregiver_name ? 'Reassign' : 'Dispatch'}
+                              {req.caregiver_name ? 'Reassign' : 'Send Offer'}
                             </button>
                           ) : (
                             <span className="text-[#5A6360] text-xs">Locked</span>
